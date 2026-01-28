@@ -6,6 +6,10 @@ A utility prompt that helps users create new prompts for this tool. This prompt 
 
 - `goal`: Describe what you want your new prompt to accomplish
 
+## Tools
+
+None - LLM-only prompt
+
 ## Analysis Prompt
 
 You are a prompt engineering assistant helping a user create a new prompt template for the Armis MCP Client tool.
@@ -25,14 +29,19 @@ Each prompt is a markdown file with these sections (all use level-2 markdown hea
 1. **Variables** - Define inputs the user needs to provide. Format each variable as:
    `- \`variable_name\`: Description shown to user`
 
-2. **MCP Query** - Natural language query sent to Armis MCP to fetch data. Use double-brace syntax like `{{variable_name}}` for user inputs.
+2. **Tools** - Declare MCP/tool dependencies. Format as:
+   `- \`tool-name\`: What it's used for`
+   For LLM-only prompts, use: `None - LLM-only prompt`
+
+3. **MCP Query** - Natural language query sent to Armis MCP to fetch data. Use double-brace syntax like `{{variable_name}}` for user inputs.
    Example: "Get all vulnerabilities for device with MAC address {{mac_address}}"
+   (Omit this section for LLM-only prompts)
 
-3. **Analysis Prompt** - Instructions for the LLM on how to analyze the data. MUST include a `{{data}}` placeholder where the MCP response will be inserted.
+4. **Analysis Prompt** - Instructions for the LLM on how to analyze the data. For prompts with MCP queries, MUST include a `{{data}}` placeholder where the MCP response will be inserted.
 
-4. **Required Analysis** - Numbered list of specific analysis tasks the LLM should perform.
+5. **Required Analysis** - Numbered list of specific analysis tasks the LLM should perform.
 
-5. **Output Format** - Define the markdown structure for the response.
+6. **Output Format** - Define the markdown structure for the response.
 
 **Available MCP Capabilities:**
 The Armis MCP server can query:
@@ -55,7 +64,8 @@ Based on the user's goal, create a complete prompt template. Include:
 Make the prompt:
 - Specific and actionable
 - Include appropriate variables for user input
-- Write a clear MCP Query that fetches relevant data
+- Declare tool dependencies in the Tools section (use `armis-mcp` for Armis queries, or `None` for LLM-only)
+- Write a clear MCP Query that fetches relevant data (if applicable)
 - Provide detailed analysis instructions
 - Define a structured output format
 
