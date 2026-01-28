@@ -6,33 +6,87 @@ import asyncio
 import sys
 
 import config
-from llm import query_with_tools
+from llm import analyze_data, query_with_tools
 from mcp_client import ArmisMCPClient
-from prompts import build_prompt, build_system_prompt, list_prompts
+from prompts import build_system_prompt, list_prompts, parse_prompt
 
 
 async def run_mac_analysis(mac_address: str) -> None:
-    """Run MAC address risk analysis."""
-    print(f"Analyzing device: {mac_address}")
+    """
+    Run MAC address risk analysis using deterministic data fetching.
 
-    system_prompt = build_system_prompt()
-    user_prompt = build_prompt("mac-risk-summarizer", mac_address=mac_address)
+    Flow:
+    1. Parse prompt to extract MCP Query
+    2. Send query directly to MCP (deterministic)
+    3. Send data + analysis prompt to LLM
+    """
+    print("\n" + "=" * 60)
+    print(f"[ANALYSIS] Starting device analysis")
+    print(f"[ANALYSIS] MAC Address: {mac_address}")
+    print("=" * 60)
 
-    if user_prompt is None:
-        print("Error: mac-risk-summarizer prompt not found", file=sys.stderr)
+    # Parse the prompt template
+    parsed = parse_prompt("mac-risk-summarizer", mac_address=mac_address)
+    if parsed is None:
+        print("[ERROR] mac-risk-summarizer prompt not found", file=sys.stderr)
         sys.exit(1)
 
+    if parsed.mcp_query is None:
+        print("[ERROR] No MCP Query section found in prompt template", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"\n[PROMPT] Loaded: mac-risk-summarizer")
+    print(f"[PROMPT] MCP Query extracted ({len(parsed.mcp_query)} chars)")
+
+    # Connect to MCP and fetch device data
     async with ArmisMCPClient() as client:
-        result = await query_with_tools(client, system_prompt, user_prompt)
+        # Step 1: Query MCP directly with the deterministic query
+        device_data = await client.query(parsed.mcp_query)
+
+        if not device_data.strip():
+            print("[WARNING] MCP returned empty response")
+            device_data = "No data returned from Armis for this device."
+
+        # Step 2: Build the analysis prompt with the fetched data
+        analysis_prompt = parsed.analysis_prompt.replace("{{device_data}}", device_data)
+
+        # Step 3: Send to LLM for analysis
+        print("\n" + "=" * 60)
+        print("[LLM] Sending data to LLM for analysis...")
+        print(f"[LLM] Model: {config.OLLAMA_MODEL}")
+        print(f"[LLM] System prompt: {len(build_system_prompt())} chars")
+        print(f"[LLM] Analysis prompt: {len(analysis_prompt)} chars")
+        print("=" * 60)
+
+        system_prompt = build_system_prompt()
+        result = analyze_data(system_prompt, analysis_prompt)
+
+        print("\n" + "=" * 60)
+        print("[RESULT] Analysis complete")
+        print("=" * 60)
         print("\n" + result)
 
 
 async def run_freeform_query(question: str) -> None:
-    """Run a free-form question."""
+    """
+    Run a free-form question using LLM-driven tool calling.
+
+    For open-ended questions, the LLM decides what to query.
+    """
+    print("\n" + "=" * 60)
+    print(f"[QUERY] Free-form question mode")
+    print(f"[QUERY] Question: {question}")
+    print("=" * 60)
+
     system_prompt = build_system_prompt()
 
     async with ArmisMCPClient() as client:
+        print("\n[LLM] Starting tool-calling loop...")
         result = await query_with_tools(client, system_prompt, question)
+
+        print("\n" + "=" * 60)
+        print("[RESULT] Query complete")
+        print("=" * 60)
         print("\n" + result)
 
 
@@ -40,12 +94,15 @@ async def interactive_mode() -> None:
     """Run interactive menu mode."""
     prompts = list_prompts()
 
+    print("\n" + "=" * 60)
+    print("ARMIS MCP CLIENT - Interactive Mode")
+    print("=" * 60)
     print("\nAvailable options:")
-    print("-" * 60)
+    print("-" * 40)
     print("  0. Ask a question (free-form)")
     for i, p in enumerate(prompts, 1):
         print(f"  {i}. {p['name']}: {p['description']}")
-    print("-" * 60)
+    print("-" * 40)
 
     while True:
         try:
@@ -72,34 +129,22 @@ async def interactive_mode() -> None:
             if not question:
                 print("Question required")
                 continue
-
-            async with ArmisMCPClient() as client:
-                result = await query_with_tools(client, build_system_prompt(), question)
-                print("\n" + result)
+            await run_freeform_query(question)
             continue
 
         selected = prompts[idx - 1]
         print(f"\nSelected: {selected['name']}")
 
-        # Collect variables based on prompt ID
-        variables = {}
+        # Handle prompt-specific inputs
         if selected["id"] == "mac-risk-summarizer":
             mac = input("Enter MAC address: ").strip()
             if not mac:
                 print("MAC address required")
                 continue
-            variables["mac_address"] = mac
-
-        system_prompt = build_system_prompt()
-        user_prompt = build_prompt(selected["id"], **variables)
-
-        if user_prompt is None:
-            print(f"Error: Prompt file not found for {selected['id']}")
-            continue
-
-        async with ArmisMCPClient() as client:
-            result = await query_with_tools(client, system_prompt, user_prompt)
-            print("\n" + result)
+            await run_mac_analysis(mac)
+        else:
+            # Generic handling for other prompts (future)
+            print(f"Prompt '{selected['id']}' not yet implemented")
 
 
 def main() -> None:
