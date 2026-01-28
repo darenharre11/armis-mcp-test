@@ -27,23 +27,29 @@ async def run_mac_analysis(mac_address: str) -> None:
         print("\n" + result)
 
 
+async def run_freeform_query(question: str) -> None:
+    """Run a free-form question."""
+    system_prompt = build_system_prompt()
+
+    async with ArmisMCPClient() as client:
+        result = await query_with_tools(client, system_prompt, question)
+        print("\n" + result)
+
+
 async def interactive_mode() -> None:
     """Run interactive menu mode."""
     prompts = list_prompts()
 
-    if not prompts:
-        print("No prompts available. Add prompts to context/prompts/", file=sys.stderr)
-        sys.exit(1)
-
-    print("\nAvailable prompts:")
+    print("\nAvailable options:")
     print("-" * 60)
+    print("  0. Ask a question (free-form)")
     for i, p in enumerate(prompts, 1):
         print(f"  {i}. {p['name']}: {p['description']}")
     print("-" * 60)
 
     while True:
         try:
-            choice = input("\nSelect prompt (number) or 'q' to quit: ").strip()
+            choice = input("\nSelect option (number) or 'q' to quit: ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
@@ -52,15 +58,27 @@ async def interactive_mode() -> None:
             break
 
         try:
-            idx = int(choice) - 1
-            if not 0 <= idx < len(prompts):
+            idx = int(choice)
+            if idx < 0 or idx > len(prompts):
                 print("Invalid selection")
                 continue
         except ValueError:
             print("Enter a number or 'q'")
             continue
 
-        selected = prompts[idx]
+        # Free-form question
+        if idx == 0:
+            question = input("Enter your question: ").strip()
+            if not question:
+                print("Question required")
+                continue
+
+            async with ArmisMCPClient() as client:
+                result = await query_with_tools(client, build_system_prompt(), question)
+                print("\n" + result)
+            continue
+
+        selected = prompts[idx - 1]
         print(f"\nSelected: {selected['name']}")
 
         # Collect variables based on prompt ID
@@ -79,7 +97,6 @@ async def interactive_mode() -> None:
             print(f"Error: Prompt file not found for {selected['id']}")
             continue
 
-        print("\nProcessing...")
         async with ArmisMCPClient() as client:
             result = await query_with_tools(client, system_prompt, user_prompt)
             print("\n" + result)
@@ -93,6 +110,11 @@ def main() -> None:
         "--mac",
         metavar="ADDRESS",
         help="Analyze device by MAC address",
+    )
+    parser.add_argument(
+        "--query", "-q",
+        metavar="QUESTION",
+        help="Ask a free-form question",
     )
     parser.add_argument(
         "--interactive", "-i",
@@ -110,6 +132,8 @@ def main() -> None:
 
     if args.mac:
         asyncio.run(run_mac_analysis(args.mac))
+    elif args.query:
+        asyncio.run(run_freeform_query(args.query))
     elif args.interactive:
         asyncio.run(interactive_mode())
     else:

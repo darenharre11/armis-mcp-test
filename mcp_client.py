@@ -22,14 +22,17 @@ def mcp_tool_to_ollama(tool) -> dict:
 class ArmisMCPClient:
     """Async context manager for Armis MCP server connection."""
 
-    def __init__(self):
+    def __init__(self, verbose: bool = True):
         self._session = None
         self._read = None
         self._write = None
         self._cm = None
         self._tools = None
+        self._verbose = verbose
 
     async def __aenter__(self):
+        if self._verbose:
+            print("Connecting to Armis MCP server...")
         self._cm = streamablehttp_client(
             config.ARMIS_MCP_URL,
             headers={"Authorization": f"Bearer {config.ARMIS_API_KEY}"},
@@ -38,6 +41,11 @@ class ArmisMCPClient:
         self._session = ClientSession(self._read, self._write)
         await self._session.__aenter__()
         await self._session.initialize()
+
+        # Verify connection by listing tools
+        tools = await self.list_tools()
+        if self._verbose:
+            print(f"Connected successfully. {len(tools)} tools available.")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
