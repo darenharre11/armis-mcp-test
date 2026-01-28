@@ -8,47 +8,55 @@ import sys
 import config
 from llm import analyze_data, query_with_tools
 from mcp_client import ArmisMCPClient
-from prompts import build_system_prompt, list_prompts, parse_prompt
+from prompts import build_system_prompt, extract_variables, list_prompts, parse_prompt
 
 
-async def run_mac_analysis(mac_address: str) -> None:
+async def run_prompt_analysis(prompt_id: str, **variables) -> None:
     """
-    Run MAC address risk analysis using deterministic data fetching.
+    Run any prompt-based analysis using deterministic data fetching.
 
     Flow:
     1. Parse prompt to extract MCP Query
     2. Send query directly to MCP (deterministic)
     3. Send data + analysis prompt to LLM
+
+    Args:
+        prompt_id: The prompt ID (filename without .md extension)
+        **variables: Variable substitutions for the prompt template
     """
     print("\n" + "=" * 60)
-    print(f"[ANALYSIS] Starting device analysis")
-    print(f"[ANALYSIS] MAC Address: {mac_address}")
+    print(f"[ANALYSIS] Starting analysis with prompt: {prompt_id}")
+    for key, value in variables.items():
+        print(f"[ANALYSIS] {key}: {value}")
     print("=" * 60)
 
     # Parse the prompt template
-    parsed = parse_prompt("mac-risk-summarizer", mac_address=mac_address)
+    parsed = parse_prompt(prompt_id, **variables)
     if parsed is None:
-        print("[ERROR] mac-risk-summarizer prompt not found", file=sys.stderr)
+        print(f"[ERROR] Prompt '{prompt_id}' not found", file=sys.stderr)
         sys.exit(1)
 
     if parsed.mcp_query is None:
         print("[ERROR] No MCP Query section found in prompt template", file=sys.stderr)
         sys.exit(1)
 
-    print(f"\n[PROMPT] Loaded: mac-risk-summarizer")
+    print(f"\n[PROMPT] Loaded: {prompt_id}")
     print(f"[PROMPT] MCP Query extracted ({len(parsed.mcp_query)} chars)")
 
     # Connect to MCP and fetch device data
     async with ArmisMCPClient() as client:
         # Step 1: Query MCP directly with the deterministic query
-        device_data = await client.query(parsed.mcp_query)
+        mcp_data = await client.query(parsed.mcp_query)
 
-        if not device_data.strip():
+        if not mcp_data.strip():
             print("[WARNING] MCP returned empty response")
-            device_data = "No data returned from Armis for this device."
+            mcp_data = "No data returned from Armis."
 
         # Step 2: Build the analysis prompt with the fetched data
-        analysis_prompt = parsed.analysis_prompt.replace("{{device_data}}", device_data)
+        # Replace common data placeholders
+        analysis_prompt = parsed.analysis_prompt
+        for placeholder in ["device_data", "data", "mcp_data", "result"]:
+            analysis_prompt = analysis_prompt.replace(f"{{{{{placeholder}}}}}", mcp_data)
 
         # Step 3: Send to LLM for analysis
         print("\n" + "=" * 60)
@@ -65,6 +73,11 @@ async def run_mac_analysis(mac_address: str) -> None:
         print("[RESULT] Analysis complete")
         print("=" * 60)
         print("\n" + result)
+
+
+async def run_mac_analysis(mac_address: str) -> None:
+    """Run MAC address risk analysis (convenience wrapper)."""
+    await run_prompt_analysis("mac-risk-summarizer", mac_address=mac_address)
 
 
 async def run_freeform_query(question: str) -> None:
@@ -144,16 +157,24 @@ async def interactive_mode() -> None:
         selected = prompts[idx - 1]
         print(f"\nSelected: {selected['name']}")
 
-        # Handle prompt-specific inputs
-        if selected["id"] == "mac-risk-summarizer":
-            mac = input("Enter MAC address: ").strip()
-            if not mac:
-                print("MAC address required")
-                continue
-            await run_mac_analysis(mac)
+        # Get variable definitions from the prompt
+        variables = extract_variables(selected["id"])
+
+        # Collect values for each variable
+        var_values = {}
+        for var in variables:
+            value = input(f"Enter {var['description']}: ").strip()
+            if not value:
+                print(f"{var['name']} is required")
+                break
+            var_values[var["name"]] = value
         else:
-            # Generic handling for other prompts (future)
-            print(f"Prompt '{selected['id']}' not yet implemented")
+            # All variables collected successfully
+            await run_prompt_analysis(selected["id"], **var_values)
+            continue
+
+        # Variable collection was interrupted (break was hit)
+        continue
 
 
 def main() -> None:
