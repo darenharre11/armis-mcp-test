@@ -13,12 +13,16 @@ from prompts import build_system_prompt, extract_variables, list_prompts, parse_
 
 async def run_prompt_analysis(prompt_id: str, **variables) -> None:
     """
-    Run any prompt-based analysis using deterministic data fetching.
+    Run any prompt-based analysis.
 
-    Flow:
+    Flow (with MCP Query):
     1. Parse prompt to extract MCP Query
     2. Send query directly to MCP (deterministic)
     3. Send data + analysis prompt to LLM
+
+    Flow (LLM-only, no MCP Query):
+    1. Parse prompt to extract analysis prompt
+    2. Send analysis prompt directly to LLM
 
     Args:
         prompt_id: The prompt ID (filename without .md extension)
@@ -36,11 +40,29 @@ async def run_prompt_analysis(prompt_id: str, **variables) -> None:
         print(f"[ERROR] Prompt '{prompt_id}' not found", file=sys.stderr)
         sys.exit(1)
 
-    if parsed.mcp_query is None:
-        print("[ERROR] No MCP Query section found in prompt template", file=sys.stderr)
-        sys.exit(1)
-
     print(f"\n[PROMPT] Loaded: {prompt_id}")
+
+    # Check if this is an LLM-only prompt (no MCP query)
+    if parsed.mcp_query is None:
+        print("[PROMPT] LLM-only mode (no MCP query)")
+
+        # Send analysis prompt directly to LLM
+        print("\n" + "=" * 60)
+        print("[LLM] Sending prompt to LLM...")
+        print(f"[LLM] Model: {config.OLLAMA_MODEL}")
+        print(f"[LLM] System prompt: {len(build_system_prompt())} chars")
+        print(f"[LLM] Analysis prompt: {len(parsed.analysis_prompt)} chars")
+        print("=" * 60)
+
+        system_prompt = build_system_prompt()
+        result = analyze_data(system_prompt, parsed.analysis_prompt)
+
+        print("\n" + "=" * 60)
+        print("[RESULT] Analysis complete")
+        print("=" * 60)
+        print("\n" + result)
+        return
+
     print(f"[PROMPT] MCP Query extracted ({len(parsed.mcp_query)} chars)")
 
     # Connect to MCP and fetch device data
