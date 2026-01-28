@@ -90,13 +90,8 @@ async def run_freeform_query(question: str) -> None:
         print("\n" + result)
 
 
-async def interactive_mode() -> None:
-    """Run interactive menu mode."""
-    prompts = list_prompts()
-
-    print("\n" + "=" * 60)
-    print("ARMIS MCP CLIENT - Interactive Mode")
-    print("=" * 60)
+def display_menu(prompts: list[dict]) -> None:
+    """Display the interactive menu options."""
     print("\nAvailable options:")
     print("-" * 40)
     print("  0. Ask a question (free-form)")
@@ -104,9 +99,19 @@ async def interactive_mode() -> None:
         print(f"  {i}. {p['name']}: {p['description']}")
     print("-" * 40)
 
+
+async def interactive_mode() -> None:
+    """Run interactive menu mode."""
+    prompts = list_prompts()
+
+    print("\n" + "=" * 60)
+    print("ARMIS MCP CLIENT - Interactive Mode")
+    print("=" * 60)
+    display_menu(prompts)
+
     while True:
         try:
-            choice = input("\nSelect option (number) or 'q' to quit: ").strip()
+            choice = input("\nSelect option (number), 'l' to list, or 'q' to quit: ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
@@ -114,13 +119,17 @@ async def interactive_mode() -> None:
         if choice.lower() == "q":
             break
 
+        if choice.lower() == "l":
+            display_menu(prompts)
+            continue
+
         try:
             idx = int(choice)
             if idx < 0 or idx > len(prompts):
                 print("Invalid selection")
                 continue
         except ValueError:
-            print("Enter a number or 'q'")
+            print("Enter a number, 'l' to list options, or 'q' to quit")
             continue
 
         # Free-form question
