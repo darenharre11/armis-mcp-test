@@ -1,7 +1,12 @@
 # MAC Risk Summarizer
 
 ## Variables
+
 - `mac_address`: The MAC address to analyze
+
+## Tools
+
+- `armis-mcp`: Query device and vulnerability data from Armis
 
 ## MCP Query
 

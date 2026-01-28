@@ -23,6 +23,21 @@ Example:
 
 If your prompt requires no user input, you can omit this section or leave it empty.
 
+## Tools
+
+Declare which MCP servers or tools this prompt requires. This makes dependencies explicit and supports future multi-MCP configurations.
+
+Format:
+- `tool-name`: Brief description of what it's used for
+
+Example (using Armis MCP):
+- `armis-mcp`: Query device and vulnerability data
+
+For LLM-only prompts (no external tools), use:
+```
+None - LLM-only prompt
+```
+
 ## MCP Query
 
 This is the query sent to the Armis MCP server to fetch data. Use `{{variable_name}}` syntax to substitute user-provided values.

@@ -9,6 +9,7 @@ PROMPTS_DIR = CONTEXT_DIR / "prompts"
 @dataclass
 class ParsedPrompt:
     """Parsed prompt with MCP query and analysis prompt separated."""
+    tools: list[str]       # List of tools/MCPs this prompt requires (empty = LLM-only)
     mcp_query: str | None  # Query to send directly to MCP
     analysis_prompt: str   # Prompt to send to LLM (with {{device_data}} placeholder)
     full_content: str      # Original full content for fallback
@@ -99,11 +100,41 @@ def extract_variables(prompt_id: str) -> list[dict]:
     return variables
 
 
+def extract_tools(prompt_id: str) -> list[str]:
+    """
+    Extract tool/MCP requirements from a prompt's ## Tools section.
+
+    Returns list of tool identifiers (e.g., ["armis-mcp"]).
+    Returns empty list if no tools section or if "none" is specified.
+    """
+    template = load_prompt(prompt_id)
+    if template is None:
+        return []
+
+    tools_section = _extract_section(template, "Tools")
+    if not tools_section:
+        return []
+
+    tools = []
+    for line in tools_section.split("\n"):
+        line = line.strip().lower()
+        # Skip "none" indicators
+        if line in ("none", "none.", "n/a", "-") or "no tools" in line or "llm-only" in line:
+            return []
+        # Parse lines like: - armis-mcp or - `armis-mcp`
+        match = re.match(r"-\s*`?(\w[\w-]*)`?", line)
+        if match:
+            tools.append(match.group(1))
+
+    return tools
+
+
 def parse_prompt(prompt_id: str, **variables) -> ParsedPrompt | None:
     """
     Parse a prompt template into its components.
 
     Extracts:
+    - Tools: List of MCP/tool dependencies
     - MCP Query: The query to send directly to the MCP server
     - Analysis Prompt: Everything after "## Analysis Prompt" to send to the LLM
 
@@ -112,6 +143,9 @@ def parse_prompt(prompt_id: str, **variables) -> ParsedPrompt | None:
     template = load_prompt(prompt_id)
     if template is None:
         return None
+
+    # Extract tools before variable substitution
+    tools = extract_tools(prompt_id)
 
     # Substitute variables in the template
     for key, value in variables.items():
@@ -129,6 +163,7 @@ def parse_prompt(prompt_id: str, **variables) -> ParsedPrompt | None:
         analysis_prompt = template
 
     return ParsedPrompt(
+        tools=tools,
         mcp_query=mcp_query,
         analysis_prompt=analysis_prompt,
         full_content=template,
