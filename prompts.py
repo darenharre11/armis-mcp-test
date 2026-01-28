@@ -70,6 +70,35 @@ def _extract_section(content: str, section_name: str) -> str | None:
     return None
 
 
+def extract_variables(prompt_id: str) -> list[dict]:
+    """
+    Extract variable definitions from a prompt's ## Variables section.
+
+    Returns list of dicts with keys: name, description
+    Example: [{"name": "mac_address", "description": "The MAC address to analyze"}]
+    """
+    template = load_prompt(prompt_id)
+    if template is None:
+        return []
+
+    variables_section = _extract_section(template, "Variables")
+    if not variables_section:
+        return []
+
+    variables = []
+    # Parse lines like: - `variable_name`: Description
+    for line in variables_section.split("\n"):
+        line = line.strip()
+        match = re.match(r"-\s*`(\w+)`:\s*(.+)", line)
+        if match:
+            variables.append({
+                "name": match.group(1),
+                "description": match.group(2).strip(),
+            })
+
+    return variables
+
+
 def parse_prompt(prompt_id: str, **variables) -> ParsedPrompt | None:
     """
     Parse a prompt template into its components.
