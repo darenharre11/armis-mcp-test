@@ -1,5 +1,3 @@
-import json
-
 import ollama
 
 import config
@@ -8,11 +6,29 @@ from mcp_client import ArmisMCPClient
 MAX_TOOL_ITERATIONS = 5
 
 
+def analyze_data(system_prompt: str, user_prompt: str) -> str:
+    """
+    Query Ollama to analyze data without tool calling.
+
+    Use this when data has already been fetched from MCP and just needs analysis.
+    """
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    response = ollama.chat(
+        model=config.OLLAMA_MODEL,
+        messages=messages,
+    )
+
+    return response["message"].get("content", "")
+
+
 async def query_with_tools(
     client: ArmisMCPClient,
     system_prompt: str,
     user_prompt: str,
-    verbose: bool = True,
 ) -> str:
     """
     Query Ollama with MCP tools available.
@@ -22,6 +38,9 @@ async def query_with_tools(
     2. If response contains tool_calls, execute via MCP
     3. Append results and repeat
     4. Return final response when no more tool calls
+
+    Note: For deterministic data fetching, prefer using mcp_client.query()
+    directly and then analyze_data() instead of this function.
     """
     tools = await client.get_ollama_tools()
 
@@ -31,8 +50,7 @@ async def query_with_tools(
     ]
 
     for iteration in range(MAX_TOOL_ITERATIONS):
-        if verbose:
-            print(f"Thinking... (iteration {iteration + 1}/{MAX_TOOL_ITERATIONS})")
+        print(f"  [LLM] Iteration {iteration + 1}/{MAX_TOOL_ITERATIONS}...")
 
         response = ollama.chat(
             model=config.OLLAMA_MODEL,
@@ -47,31 +65,27 @@ async def query_with_tools(
         if not tool_calls:
             return assistant_message.get("content", "")
 
-        if verbose:
-            print(f"Executing {len(tool_calls)} tool call(s)...")
+        print(f"  [LLM] Executing {len(tool_calls)} tool call(s)...")
 
         for tool_call in tool_calls:
             func = tool_call["function"]
             tool_name = func["name"]
             tool_args = func.get("arguments", {})
 
-            if verbose:
-                print(f"  [Tool] {tool_name}")
+            print(f"    - Calling: {tool_name}")
 
             try:
                 result = await client.call_tool(tool_name, tool_args)
-                if verbose:
-                    print(f"  [Done] {tool_name} returned {len(result)} chars")
+                preview = result[:200] + "..." if len(result) > 200 else result
+                print(f"    - Result: {len(result)} chars")
             except Exception as e:
                 result = f"Error calling tool: {e}"
-                if verbose:
-                    print(f"  [Error] {tool_name}: {e}")
+                print(f"    - Error: {e}")
 
             messages.append({
                 "role": "tool",
                 "content": result,
             })
 
-    if verbose:
-        print("Max iterations reached, returning last response.")
+    print("  [LLM] Max iterations reached.")
     return messages[-1].get("content", "") if messages else ""

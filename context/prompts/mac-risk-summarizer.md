@@ -3,15 +3,26 @@
 ## Variables
 - `mac_address`: The MAC address to analyze
 
-## Prompt
+## MCP Query
 
-Analyze the device with MAC address: {{mac_address}}
+Get all device information for the device with MAC address {{mac_address}}. Include:
+- Device type, category, and manufacturer
+- Operating system and version
+- First seen and last seen timestamps
+- Network information (IP address, VLAN, subnet)
+- Any known security risks, vulnerabilities, or alerts
+- Behavioral anomalies or policy violations
 
-Use the available Armis tools to gather information about this device. Then provide a comprehensive security assessment.
+## Analysis Prompt
+
+Based on the following device data retrieved from Armis, provide a comprehensive security assessment.
+
+**Device Data:**
+{{device_data}}
 
 ## Required Analysis
 
-1. **Device Details**: Retrieve and summarize:
+1. **Device Details**: Summarize:
    - Device type and category
    - Manufacturer
    - Operating system and version
