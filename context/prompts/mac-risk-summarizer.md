@@ -35,6 +35,8 @@ Based on the following device data retrieved from Armis, provide a comprehensive
    - Network exposure
    - Behavioral anomalies
 
+   **Important**: Exclude any CVEs or vulnerabilities that have been marked as "ignored", "suppressed", "accepted", or similar status flags indicating they have been acknowledged and dismissed by the security team. Only include active, unresolved vulnerabilities in your risk analysis.
+
 3. **Recommendations**: Provide top 3 actionable recommendations to improve security posture.
 
 4. **Overall Risk Evaluation**: Assign a risk level (Low/Medium/High/Critical) with justification.
