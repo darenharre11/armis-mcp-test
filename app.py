@@ -26,7 +26,10 @@ FREEFORM_ID = "__freeform__"
 
 def run_async(coro):
     """Run async coroutine with proper event loop lifecycle for anyio/MCP."""
-    return asyncio.run(coro)
+    try:
+        return asyncio.run(coro)
+    except (asyncio.CancelledError, BaseExceptionGroup) as e:
+        raise RuntimeError(f"Async operation failed: {e}") from e
 
 
 st.set_page_config(page_title="Armis MCP Client", layout="wide")

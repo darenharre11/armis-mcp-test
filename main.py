@@ -62,7 +62,7 @@ async def run_prompt_analysis(prompt_id: str, on_status=None, **variables) -> st
         on_status("=" * 60)
 
         system_prompt = build_system_prompt()
-        result = analyze_data(system_prompt, parsed.analysis_prompt)
+        result = analyze_data(system_prompt, parsed.analysis_prompt, on_status=on_status)
 
         on_status("\n" + "=" * 60)
         on_status("[RESULT] Analysis complete")
@@ -98,7 +98,7 @@ async def run_prompt_analysis(prompt_id: str, on_status=None, **variables) -> st
         on_status("=" * 60)
 
         system_prompt = build_system_prompt()
-        result = analyze_data(system_prompt, analysis_prompt)
+        result = analyze_data(system_prompt, analysis_prompt, on_status=on_status)
 
         on_status("\n" + "=" * 60)
         on_status("[RESULT] Analysis complete")
@@ -122,7 +122,7 @@ async def run_custom_analysis(content: str, on_status=None) -> str:
         on_status("[PROMPT] LLM-only mode (no MCP query)")
         on_status("[LLM] Sending prompt to LLM...")
         system_prompt = build_system_prompt()
-        result = analyze_data(system_prompt, parsed.analysis_prompt)
+        result = analyze_data(system_prompt, parsed.analysis_prompt, on_status=on_status)
         on_status("[RESULT] Analysis complete")
         return result
 
@@ -143,7 +143,7 @@ async def run_custom_analysis(content: str, on_status=None) -> str:
 
         on_status("[LLM] Sending data to LLM for analysis...")
         system_prompt = build_system_prompt()
-        result = analyze_data(system_prompt, analysis_prompt)
+        result = analyze_data(system_prompt, analysis_prompt, on_status=on_status)
         on_status("[RESULT] Analysis complete")
         return result
 

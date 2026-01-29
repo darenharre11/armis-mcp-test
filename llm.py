@@ -6,23 +6,32 @@ from mcp_client import ArmisMCPClient
 MAX_TOOL_ITERATIONS = 5
 
 
-def analyze_data(system_prompt: str, user_prompt: str) -> str:
+def analyze_data(system_prompt: str, user_prompt: str, on_status=None) -> str:
     """
     Query Ollama to analyze data without tool calling.
 
     Use this when data has already been fetched from MCP and just needs analysis.
     """
+    if on_status is None:
+        on_status = lambda _: None
+
+    on_status("  [LLM] Waiting for model response...")
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
 
-    response = ollama.chat(
-        model=config.OLLAMA_MODEL,
-        messages=messages,
-    )
+    chunks = []
+    char_count = 0
+    for chunk in ollama.chat(model=config.OLLAMA_MODEL, messages=messages, stream=True):
+        text = chunk["message"].get("content", "")
+        chunks.append(text)
+        char_count += len(text)
+        if char_count % 500 < len(text):
+            on_status(f"  [LLM] Generating... ({char_count} chars)")
 
-    return response["message"].get("content", "")
+    on_status(f"  [LLM] Response complete ({char_count} chars)")
+    return "".join(chunks)
 
 
 async def query_with_tools(
@@ -55,6 +64,7 @@ async def query_with_tools(
 
     for iteration in range(MAX_TOOL_ITERATIONS):
         on_status(f"  [LLM] Iteration {iteration + 1}/{MAX_TOOL_ITERATIONS}...")
+        on_status("  [LLM] Waiting for model response...")
 
         response = ollama.chat(
             model=config.OLLAMA_MODEL,
