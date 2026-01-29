@@ -142,6 +142,3 @@ Based on the user's goal, create a complete prompt template. Provide:
 - Include `{{data}}` or `{{device_data}}` placeholder in the Analysis Prompt section when using MCP
 - Be specific and actionable in the MCP Query — tell Armis exactly what data to fetch
 - Define a clear Output Format so responses are consistent
-
-**Important formatting requirement:**
-You MUST wrap the complete prompt template inside a fenced code block with the "markdown" language identifier (triple backticks followed by "markdown"). This allows the companion script to extract and save the template.

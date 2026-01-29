@@ -4,23 +4,44 @@ import re
 
 import streamlit as st
 
-from prompts import save_custom_prompt
+from prompts import _parse_frontmatter, save_custom_prompt
+
+
+def _extract_template(result: str) -> str | None:
+    """Extract the prompt template from LLM output.
+
+    Tries in order:
+    1. Fenced ```markdown code block
+    2. First YAML frontmatter block (starts with ---)
+    """
+    # Try fenced code block first
+    match = re.search(r"```markdown\s*\n(.*?)```", result, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    # Fall back to finding frontmatter start
+    idx = result.find("---\n")
+    if idx != -1:
+        return result[idx:].strip()
+    return None
 
 
 def run(result: str):
     """Parse LLM output for a prompt template and provide save UI."""
-    # Extract fenced markdown code block
-    match = re.search(r"```markdown\s*\n(.*?)```", result, re.DOTALL)
-    if not match:
+    template = _extract_template(result)
+    if not template:
         return
-    template = match.group(1).strip()
 
-    # Try to extract suggested filename from output
+    # Read name/description from frontmatter if present
+    meta, _ = _parse_frontmatter(template)
+    default_name = meta.get("name", "")
+    default_desc = meta.get("description", "")
+
+    # Also check for suggested filename in the output
     fname_match = re.search(r"[Ss]uggested filename[:\s]*`?([a-z0-9-]+\.md)`?", result)
     suggested_slug = fname_match.group(1).replace(".md", "") if fname_match else ""
 
-    # Humanize slug for default name
-    default_name = suggested_slug.replace("-", " ").title() if suggested_slug else ""
+    if not default_name and suggested_slug:
+        default_name = suggested_slug.replace("-", " ").title()
 
     st.subheader("Save as Custom Prompt")
 
@@ -29,7 +50,7 @@ def run(result: str):
     prompt_id = st.text_input("ID", value=auto_id, key="pb_save_id")
     if prompt_id and not re.fullmatch(r"[a-z0-9-]+", prompt_id):
         st.warning("ID must contain only lowercase letters, numbers, and hyphens.")
-    description = st.text_input("Description", key="pb_save_desc")
+    description = st.text_input("Description", value=default_desc, key="pb_save_desc")
     content = st.text_area("Template", value=template, height=300, key="pb_save_content")
 
     valid = name.strip() and prompt_id and re.fullmatch(r"[a-z0-9-]+", prompt_id)
