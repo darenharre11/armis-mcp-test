@@ -8,7 +8,7 @@ import sys
 import config
 from llm import analyze_data, query_with_tools
 from mcp_client import ArmisMCPClient
-from prompts import build_system_prompt, extract_variables, list_prompts, parse_prompt
+from prompts import build_system_prompt, extract_variables, list_prompts, parse_content, parse_prompt
 
 
 async def run_prompt_analysis(prompt_id: str, on_status=None, **variables) -> str:
@@ -104,6 +104,47 @@ async def run_prompt_analysis(prompt_id: str, on_status=None, **variables) -> st
         on_status("[RESULT] Analysis complete")
         on_status("=" * 60)
         on_status("\n" + result)
+        return result
+
+
+async def run_custom_analysis(content: str, on_status=None) -> str:
+    """Run analysis from raw prompt content (edited/custom prompt)."""
+    if on_status is None:
+        on_status = print
+
+    on_status("\n" + "=" * 60)
+    on_status("[ANALYSIS] Running custom/edited prompt")
+    on_status("=" * 60)
+
+    parsed = parse_content(content)
+
+    if parsed.mcp_query is None:
+        on_status("[PROMPT] LLM-only mode (no MCP query)")
+        on_status("[LLM] Sending prompt to LLM...")
+        system_prompt = build_system_prompt()
+        result = analyze_data(system_prompt, parsed.analysis_prompt)
+        on_status("[RESULT] Analysis complete")
+        return result
+
+    on_status(f"[PROMPT] MCP Query extracted ({len(parsed.mcp_query)} chars)")
+
+    async with ArmisMCPClient(on_status=on_status) as client:
+        mcp_data = await client.query(parsed.mcp_query)
+
+        if not mcp_data.strip():
+            on_status("[WARNING] MCP returned empty response")
+            mcp_data = "No data returned from Armis."
+
+        analysis_prompt = parsed.analysis_prompt
+        for placeholder in ["device_data", "data", "mcp_data", "result"]:
+            analysis_prompt = analysis_prompt.replace(
+                f"{{{{{placeholder}}}}}", mcp_data
+            )
+
+        on_status("[LLM] Sending data to LLM for analysis...")
+        system_prompt = build_system_prompt()
+        result = analyze_data(system_prompt, analysis_prompt)
+        on_status("[RESULT] Analysis complete")
         return result
 
 

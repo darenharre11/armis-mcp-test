@@ -4,6 +4,28 @@ from pathlib import Path
 
 CONTEXT_DIR = Path(__file__).parent / "context"
 PROMPTS_DIR = CONTEXT_DIR / "prompts"
+CUSTOM_DIR = PROMPTS_DIR / "custom"
+
+
+def _parse_frontmatter(text: str) -> tuple[dict, str]:
+    """Parse YAML frontmatter from markdown text.
+
+    Returns (metadata dict, body without frontmatter).
+    If no frontmatter, returns ({}, original text).
+    """
+    if not text.startswith("---"):
+        return {}, text
+    end = text.find("---", 3)
+    if end == -1:
+        return {}, text
+    raw = text[3:end].strip()
+    body = text[end + 3:].lstrip("\n")
+    meta = {}
+    for line in raw.split("\n"):
+        if ":" in line:
+            key, _, val = line.partition(":")
+            meta[key.strip()] = val.strip()
+    return meta, body
 
 
 @dataclass
@@ -26,39 +48,44 @@ def load_context() -> dict[str, str]:
 
 
 def list_prompts() -> list[dict]:
-    """
-    Parse Prompts.md index to get available prompt names.
+    """Scan prompt directories for markdown files with frontmatter.
 
     Returns list of dicts with keys: id, name, description
+    Skips _example and custom directories.
     """
-    prompts_index = CONTEXT_DIR / "Prompts.md"
-    if not prompts_index.exists():
+    if not PROMPTS_DIR.exists():
         return []
 
-    content = prompts_index.read_text()
+    skip = {"custom", "_example"}
     prompts = []
-
-    # Parse markdown table rows: | id | name | description |
-    for line in content.split("\n"):
-        line = line.strip()
-        if not line.startswith("|") or line.startswith("| ID") or line.startswith("|--"):
+    for d in sorted(PROMPTS_DIR.iterdir()):
+        if not d.is_dir() or d.name in skip:
             continue
-        parts = [p.strip() for p in line.split("|")]
-        if len(parts) >= 4:
-            prompts.append({
-                "id": parts[1],
-                "name": parts[2],
-                "description": parts[3],
-            })
+        md = d / f"{d.name}.md"
+        if not md.exists():
+            continue
+        meta, _ = _parse_frontmatter(md.read_text())
+        if not meta:
+            continue
+        prompts.append({
+            "id": d.name,
+            "name": meta.get("name", d.name),
+            "description": meta.get("description", ""),
+        })
 
     return prompts
 
 
 def load_prompt(prompt_id: str) -> str | None:
-    """Read individual prompt from context/prompts/{id}/{id}.md"""
-    path = PROMPTS_DIR / prompt_id / f"{prompt_id}.md"
-    if path.exists():
-        return path.read_text()
+    """Read prompt from context/prompts/{id}/{id}.md or custom/{id}/{id}.md.
+
+    Strips frontmatter before returning content.
+    """
+    for base in [PROMPTS_DIR, CUSTOM_DIR]:
+        path = base / prompt_id / f"{prompt_id}.md"
+        if path.exists():
+            _, body = _parse_frontmatter(path.read_text())
+            return body
     return None
 
 
@@ -184,6 +211,83 @@ def load_visualizer(prompt_id: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return getattr(module, "visualize", None)
+
+
+def parse_content(content: str) -> ParsedPrompt:
+    """Parse raw prompt content into components (no file loading)."""
+    tools_section = _extract_section(content, "Tools")
+    tools = []
+    if tools_section:
+        for line in tools_section.split("\n"):
+            line = line.strip().lower()
+            if line in ("none", "none.", "n/a", "-") or "no tools" in line or "llm-only" in line:
+                tools = []
+                break
+            match = re.match(r"-\s*`?(\w[\w-]*)`?", line)
+            if match:
+                tools.append(match.group(1))
+
+    mcp_query = _extract_section(content, "MCP Query")
+
+    analysis_match = re.search(r"## Analysis Prompt\s*\n(.*)", content, re.DOTALL)
+    if analysis_match:
+        analysis_prompt = analysis_match.group(1).strip()
+    else:
+        analysis_prompt = content
+
+    return ParsedPrompt(
+        tools=tools,
+        mcp_query=mcp_query,
+        analysis_prompt=analysis_prompt,
+        full_content=content,
+    )
+
+
+def save_custom_prompt(
+    name: str, content: str, prompt_id: str | None = None, description: str = ""
+) -> str:
+    """Save content as a custom prompt with frontmatter metadata. Returns the prompt ID."""
+    if not prompt_id:
+        prompt_id = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    # Enforce valid id pattern
+    prompt_id = re.sub(r"[^a-z0-9-]", "", prompt_id.lower().replace(" ", "-")).strip("-")
+    prompt_dir = CUSTOM_DIR / prompt_id
+    prompt_dir.mkdir(parents=True, exist_ok=True)
+    # Strip any existing frontmatter from content before prepending new one
+    _, body = _parse_frontmatter(content)
+    desc = description or "Custom prompt"
+    frontmatter = f"---\nname: {name}\ndescription: {desc}\n---\n\n"
+    (prompt_dir / f"{prompt_id}.md").write_text(frontmatter + body)
+    return prompt_id
+
+
+def list_custom_prompts() -> list[dict]:
+    """List custom prompts from context/prompts/custom/."""
+    if not CUSTOM_DIR.exists():
+        return []
+    customs = []
+    for d in sorted(CUSTOM_DIR.iterdir()):
+        if not d.is_dir():
+            continue
+        md = d / f"{d.name}.md"
+        if not md.exists():
+            continue
+        meta, body = _parse_frontmatter(md.read_text())
+        if meta:
+            name = meta.get("name", d.name)
+            description = meta.get("description", "Custom prompt")
+        else:
+            # Fallback: read H1 title from markdown
+            title_match = re.match(r"#\s+(.+)", body)
+            name = title_match.group(1).strip() if title_match else d.name
+            description = "Custom prompt"
+        customs.append({
+            "id": d.name,
+            "name": name,
+            "description": description,
+            "custom": True,
+        })
+    return customs
 
 
 def build_prompt(prompt_id: str, **variables) -> str | None:

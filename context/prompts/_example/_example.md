@@ -1,16 +1,17 @@
+---
+name: My Prompt Name
+description: Brief description of what it does
+---
+
 # Example Prompt Template
 
-This is a template for creating new prompts. Copy this file and rename it to your prompt ID (e.g., `my-new-prompt.md`).
+This is a template for creating new prompts. Copy this directory and rename it to your prompt ID (e.g., `my-new-prompt/my-new-prompt.md`).
 
 **To add a new prompt:**
-1. Copy this file: `cp _example.md my-prompt-id.md`
-2. Edit the new file with your prompt content
-3. Add an entry to `../Prompts.md`:
-   ```
-   | my-prompt-id | My Prompt Name | Brief description of what it does |
-   ```
-
----
+1. Copy this directory: `cp -r _example my-prompt-id`
+2. Rename the `.md` file to match: `mv my-prompt-id/_example.md my-prompt-id/my-prompt-id.md`
+3. Edit the frontmatter `name` and `description` fields above
+4. Fill in the sections below
 
 ## Variables
 

@@ -1,3 +1,8 @@
+---
+name: Prompt Builder [Experimental]
+description: Create a new prompt template for this tool (LLM-only, no MCP)
+---
+
 # Prompt Builder
 
 A utility prompt that helps users create new prompts for this tool. This prompt does not make MCP calls - it interacts directly with the LLM.
@@ -68,5 +73,8 @@ Make the prompt:
 - Write a clear MCP Query that fetches relevant data (if applicable)
 - Provide detailed analysis instructions
 - Define a structured output format
+
+**Important formatting requirement:**
+You MUST wrap the complete prompt template content inside a fenced code block with the "markdown" language identifier (triple backticks followed by "markdown"). This allows the companion visualizer to extract the template programmatically.
 
 Provide the complete prompt template ready to be saved as a .md file.

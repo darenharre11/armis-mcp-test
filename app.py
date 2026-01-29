@@ -1,12 +1,20 @@
 """Armis MCP Client - Streamlit web interface."""
 
 import asyncio
+import re
 
 import streamlit as st
 
 import config
-from main import run_freeform_query, run_prompt_analysis
-from prompts import build_prompt, extract_variables, list_prompts, load_visualizer
+from main import run_custom_analysis, run_freeform_query, run_prompt_analysis
+from prompts import (
+    build_prompt,
+    extract_variables,
+    list_custom_prompts,
+    list_prompts,
+    load_visualizer,
+    save_custom_prompt,
+)
 
 FREEFORM_ID = "__freeform__"
 
@@ -30,36 +38,45 @@ for key, default in [
     ("result_prompt_id", None),
     ("result_label", None),
     ("status_log", []),
+    ("prompt_view", None),
+    ("prompt_view_for", None),
+    ("history", []),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
 
-# Auto-switch to Results tab after analysis completes
+# Toast for custom prompt save confirmation
+if st.session_state.pop("_show_save_toast", False):
+    st.toast("Custom prompt saved!")
+
+# Deferred tab switches (must happen before the radio widget is instantiated)
 if st.session_state.pop("_switch_to_results", False):
     st.session_state.active_tab = "Results"
+if st.session_state.pop("_switch_to_configure", False):
+    st.session_state.active_tab = "Configure"
+if st.session_state.pop("_switch_to_prompts", False):
+    st.session_state.active_tab = "Prompts"
 
-# Only show Results tab when results exist
+# Build tab list — Results only when results exist
 has_results = st.session_state.result is not None
-tab_options = ["Configure", "Results"] if has_results else ["Configure"]
+tab_options = ["Prompts", "Configure", "Results"] if has_results else ["Prompts", "Configure"]
 
 if st.session_state.get("active_tab") not in tab_options:
-    st.session_state.active_tab = "Configure"
+    st.session_state.active_tab = "Prompts"
 
 st.title("Armis MCP Client")
 
-# Load prompts
+# Load prompts (built-in + custom)
 prompts = list_prompts()
+custom_prompts = list_custom_prompts()
+all_prompts = prompts + custom_prompts
 
-# Build dropdown options: prompts + free-form
-options = [p["id"] for p in prompts] + [FREEFORM_ID]
-prompt_map = {p["id"]: p for p in prompts}
+prompt_map = {p["id"]: p for p in all_prompts}
 
-
-def format_option(opt):
-    if opt == FREEFORM_ID:
-        return "Free-form Query"
-    return prompt_map[opt]["name"]
-
+# Prebuilt catalog includes free-form entry
+prebuilt_catalog = prompts + [
+    {"id": FREEFORM_ID, "name": "Free-form Query", "description": "Ask any question with tool calling"},
+]
 
 tab = st.radio(
     "View",
@@ -69,22 +86,79 @@ tab = st.radio(
     key="active_tab",
 )
 
-if tab == "Configure":
-    col_select, col_info = st.columns([3, 1])
-    selected_id = col_select.selectbox("Select prompt", options=options, format_func=format_option)
-    with col_info.popover("Prompt Catalog"):
-        for p in prompts:
-            st.markdown(f"**{p['name']}**  \n{p['description']}")
-        st.markdown("**Free-form Query**  \nAsk any question with tool calling")
+def _render_prompt_grid(items):
+    """Render a grid of prompt cards. Shared by Prebuilt and Custom sections."""
+    n_cols = min(len(items), 4)
+    for row_start in range(0, len(items), n_cols):
+        row = items[row_start : row_start + n_cols]
+        cols = st.columns(n_cols)
+        for i, p in enumerate(row):
+            with cols[i]:
+                is_sel = st.session_state.get("selected_prompt") == p["id"]
+                if st.button(
+                    p["name"],
+                    key=f"sel_{p['id']}",
+                    type="primary" if is_sel else "secondary",
+                    use_container_width=True,
+                ):
+                    st.session_state.selected_prompt = p["id"]
+                    st.session_state.prompt_view = None
+                    st.session_state.prompt_view_for = None
+                    st.session_state._switch_to_configure = True
+                    st.rerun()
+                st.caption(p["description"])
+
+
+if tab == "Prompts":
+    # Equal-height prompt cards via CSS flexbox
+    st.markdown("""
+<style>
+div[data-testid="stHorizontalBlock"] {
+    align-items: stretch;
+}
+div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+    display: flex;
+    flex-direction: column;
+}
+div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] > div[data-testid="stVerticalBlockBorderWrapper"] {
+    flex-grow: 1;
+}
+</style>
+""", unsafe_allow_html=True)
+
+    st.subheader("Prebuilt")
+    _render_prompt_grid(prebuilt_catalog)
+
+    st.subheader("Custom")
+    if custom_prompts:
+        _render_prompt_grid(custom_prompts)
+    else:
+        st.caption("No custom prompts yet. Use Edit > Save as Custom to create one.")
+
+elif tab == "Configure":
+    selected_id = st.session_state.get("selected_prompt")
+    if not selected_id:
+        st.info("Select a prompt from the Prompts tab to get started.")
+        st.stop()
+
     is_freeform = selected_id == FREEFORM_ID
 
+    # Close preview/editor when prompt selection changes
+    if st.session_state.prompt_view_for != selected_id:
+        st.session_state.prompt_view = None
+        st.session_state.prompt_view_for = None
+
+    # Show which prompt is selected
     if is_freeform:
-        st.caption("Ask any question - the LLM decides which tools to call")
+        st.subheader("Free-form Query")
+    else:
+        st.subheader(prompt_map[selected_id]["name"])
+
+    if is_freeform:
         question = st.text_area("Your question", height=150)
-        can_run = bool(question.strip())
 
         button_slot = st.empty()
-        if button_slot.button("Run", type="primary", disabled=not can_run):
+        if button_slot.button("Run", type="primary", disabled=not question.strip()):
             button_slot.button("Running...", type="primary", disabled=True)
 
             status_container = st.status("Running query...", expanded=True)
@@ -107,31 +181,86 @@ if tab == "Configure":
             st.session_state.result_prompt_id = None
             st.session_state.result_label = "Free-form Query"
             st.session_state.status_log = log
+            st.session_state.history.insert(0, {
+                "label": "Free-form Query",
+                "result": result,
+                "prompt_id": None,
+                "log": log,
+            })
+            st.session_state.history = st.session_state.history[:5]
             st.session_state._switch_to_results = True
             st.rerun()
 
     else:
-        st.caption(prompt_map[selected_id]["description"])
-
         variables = extract_variables(selected_id)
+        view = st.session_state.prompt_view
+
+        # Hide variable inputs when editing raw template
         var_values = {}
-        for var in variables:
-            var_values[var["name"]] = st.text_input(
-                var["description"], key=f"var_{var['name']}"
+        if view == "edit":
+            st.info(
+                "Editing raw prompt. Fill in any `{{variable}}` "
+                "placeholders in the **MCP Query** section below."
             )
+            missing = []
+        else:
+            for var in variables:
+                var_values[var["name"]] = st.text_input(
+                    var["description"], key=f"var_{var['name']}"
+                )
+            missing = [v["name"] for v in variables if not var_values.get(v["name"])]
 
-        missing = [v["name"] for v in variables if not var_values.get(v["name"])]
-
-        col_run, col_preview, _ = st.columns([1, 1, 3])
+        # Button row
+        col_edit, col_save, _, col_run = st.columns([1, 1, 2, 1])
         button_slot = col_run.empty()
-        if col_preview.button("Preview Prompt"):
-            preview = build_prompt(selected_id, **var_values)
-            if preview:
-                with st.expander("Prompt preview", expanded=True):
-                    st.code(preview, language="markdown")
 
-        if button_slot.button("Run", type="primary", disabled=bool(missing)):
+        if col_edit.button("Edit Prompt" if view != "edit" else "Preview Prompt"):
+            if view == "edit":
+                st.session_state.prompt_view = "preview"
+            else:
+                filled = {k: v for k, v in var_values.items() if v}
+                content = build_prompt(selected_id, **filled) or ""
+                st.session_state.prompt_editor = content
+                st.session_state.prompt_view = "edit"
+                st.session_state.prompt_view_for = selected_id
+            st.rerun()
+
+        if view == "edit":
+            with col_save.popover("Save as Custom"):
+                save_name = st.text_input("Name", key="save_name")
+                auto_id = re.sub(r"[^a-z0-9]+", "-", save_name.lower()).strip("-") if save_name else ""
+                save_id = st.text_input("ID", value=auto_id, key="save_id")
+                if save_id and not re.fullmatch(r"[a-z0-9-]+", save_id):
+                    st.warning("ID must contain only lowercase letters, numbers, and hyphens.")
+                save_desc = st.text_input("Description", value="Custom prompt", key="save_desc")
+                valid_save = save_name.strip() and save_id and re.fullmatch(r"[a-z0-9-]+", save_id)
+                if st.button("Save", disabled=not valid_save) and valid_save:
+                    save_custom_prompt(
+                        save_name.strip(),
+                        st.session_state.prompt_editor,
+                        prompt_id=save_id.strip(),
+                        description=save_desc.strip(),
+                    )
+                    st.session_state._show_save_toast = True
+                    st.session_state._switch_to_prompts = True
+                    st.rerun()
+
+        # Always show prompt — markdown preview by default, text_area when editing
+        preview_slot = st.empty()
+        with preview_slot:
+            if view == "edit":
+                st.text_area("Edit prompt", height=400, key="prompt_editor")
+            else:
+                filled = {k: v for k, v in var_values.items() if v}
+                content = build_prompt(selected_id, **filled) or ""
+                with st.container(border=True):
+                    st.markdown(content)
+
+        # Run — editing bypasses missing-variable check
+        can_run = view == "edit" or not missing
+        if button_slot.button("Run", type="primary", disabled=not can_run):
             button_slot.button("Running...", type="primary", disabled=True)
+            preview_slot.empty()
 
             status_container = st.status("Running analysis...", expanded=True)
             placeholder = status_container.empty()
@@ -144,37 +273,70 @@ if tab == "Configure":
                 except Exception:
                     pass
 
-            result = run_async(
-                run_prompt_analysis(selected_id, on_status=on_status, **var_values)
-            )
+            if view == "edit":
+                result = run_async(
+                    run_custom_analysis(
+                        st.session_state.prompt_editor, on_status=on_status
+                    )
+                )
+            else:
+                result = run_async(
+                    run_prompt_analysis(
+                        selected_id, on_status=on_status, **var_values
+                    )
+                )
             status_container.update(label="Complete", state="complete")
 
+            label = prompt_map[selected_id]["name"]
             st.session_state.result = result
             st.session_state.result_prompt_id = selected_id
-            st.session_state.result_label = prompt_map[selected_id]["name"]
+            st.session_state.result_label = label
             st.session_state.status_log = log
+            st.session_state.history.insert(0, {
+                "label": label,
+                "result": result,
+                "prompt_id": selected_id,
+                "log": log,
+            })
+            st.session_state.history = st.session_state.history[:5]
             st.session_state._switch_to_results = True
             st.rerun()
 
 else:
-    st.subheader(st.session_state.result_label)
-    st.markdown(st.session_state.result)
+    history = st.session_state.history
+    # Pick which run to display
+    if len(history) > 1:
+        options = [f"{i + 1}. {h['label']}" for i, h in enumerate(history)]
+        selected_run = st.selectbox("Run history", options, index=0)
+        run_idx = int(selected_run.split(".")[0]) - 1
+    else:
+        run_idx = 0
 
-    prompt_id = st.session_state.result_prompt_id
+    run = history[run_idx] if history else {
+        "label": st.session_state.result_label,
+        "result": st.session_state.result,
+        "prompt_id": st.session_state.result_prompt_id,
+        "log": st.session_state.status_log,
+    }
+
+    st.subheader(run["label"])
+    st.markdown(run["result"])
+
+    prompt_id = run["prompt_id"]
     if prompt_id:
         viz = load_visualizer(prompt_id)
         if viz:
             st.divider()
-            viz(st.session_state.result)
+            viz(run["result"])
 
-    if st.session_state.status_log:
+    if run["log"]:
         with st.expander("Execution log"):
-            st.code("\n".join(st.session_state.status_log))
+            st.code("\n".join(run["log"]))
 
     if st.button("New Analysis"):
         st.session_state.result = None
         st.session_state.result_prompt_id = None
         st.session_state.result_label = None
         st.session_state.status_log = []
-        st.session_state.active_tab = "Configure"
+        st.session_state._switch_to_prompts = True
         st.rerun()

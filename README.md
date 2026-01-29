@@ -55,18 +55,24 @@ python main.py --interactive
 
 Select from available prompts and provide required inputs. Use `l` to list available prompts at any time.
 
-## Available Prompts
+## Web Interface
 
-| ID | Name | Description |
-|----|------|-------------|
-| mac-risk-summarizer | MAC Risk Summarizer | Analyze device by MAC address, return risks and recommendations |
-| cve-volume-top5 | Top 5 CVEs by Volume | Get the top 5 CVEs affecting the most devices |
+```bash
+streamlit run app.py
+```
+
+The Streamlit UI has three tabs:
+
+- **Prompts** -- browse prebuilt and custom prompts
+- **Configure** -- fill in variables, edit/preview the prompt, and run
+- **Results** -- view output with history of the last 5 runs
 
 ## Project Structure
 
 ```
 armis-mcp-test/
 ├── main.py           # CLI entry point
+├── app.py            # Streamlit web interface
 ├── mcp_client.py     # MCP server connection
 ├── llm.py            # Ollama integration with tool calling
 ├── prompts.py        # Context and prompt loading
@@ -74,31 +80,31 @@ armis-mcp-test/
 └── context/
     ├── Role.md       # Agent persona
     ├── Rules.md      # Behavioral constraints
-    ├── Prompts.md    # Prompt index
     └── prompts/      # Individual prompt templates
-        ├── mac-risk-summarizer.md
-        ├── cve-volume-top5.md
-        └── _example.md   # Template for creating new prompts
+        ├── _example/             # Template for creating new prompts
+        ├── mac-risk-summarizer/
+        ├── cve-volume-top5/
+        ├── prompt-builder/
+        └── custom/               # User-created prompts (gitignored)
 ```
 
-## Adding New Prompts
+## Prompt System
 
-Adding new prompts requires **no Python code changes**. Simply:
-
-1. Create a new file in `context/prompts/` (e.g., `my-prompt.md`)
-2. Add an entry to the table in `context/Prompts.md`
-
-The system automatically parses variables from your prompt file and prompts users for input in interactive mode.
-
-### Prompt Template Format
-
-See `context/prompts/_example.md` for a complete template. The basic structure is:
+Each prompt lives in its own directory under `context/prompts/{id}/{id}.md`. Metadata is stored as YAML frontmatter:
 
 ```markdown
-# Prompt Name
+---
+name: My Prompt Name
+description: Brief description of what it does
+---
+
+# My Prompt Name
 
 ## Variables
 - `variable_name`: Description shown to user when prompted
+
+## Tools
+- `armis-mcp`: Query device data from Armis
 
 ## MCP Query
 The query sent to Armis MCP server.
@@ -117,24 +123,28 @@ What the LLM should analyze...
 How the LLM should structure its response...
 ```
 
+### Adding New Prompts
+
+No Python code changes required:
+
+1. Copy the `_example/` directory: `cp -r context/prompts/_example context/prompts/my-prompt`
+2. Rename the `.md` file: `mv context/prompts/my-prompt/_example.md context/prompts/my-prompt/my-prompt.md`
+3. Edit the frontmatter (`name`, `description`) and fill in sections
+
+Or use the **Prompt Builder** in the web UI to generate a template and save it as a custom prompt.
+
 ### Key Sections
 
 | Section | Required | Purpose |
 |---------|----------|---------|
+| Frontmatter | Yes | `name` and `description` for catalog display |
 | Variables | No | Defines inputs collected from the user. Omit for prompts with no inputs. |
-| MCP Query | Yes | The query sent to Armis to fetch data |
-| Analysis Prompt | Yes | Instructions for the LLM (must include `{{data}}` placeholder) |
+| Tools | No | MCP/tool dependencies. Use `None` for LLM-only prompts. |
+| MCP Query | No | The query sent to Armis to fetch data. Omit for LLM-only prompts. |
+| Analysis Prompt | Yes | Instructions for the LLM (must include `{{data}}` placeholder if using MCP) |
 | Required Analysis | No | Detailed analysis requirements |
 | Output Format | No | Structure for the LLM's response |
 
-### Variable Format
+### Custom Prompts
 
-Variables are defined as a markdown list with backtick-quoted names:
-
-```markdown
-## Variables
-- `mac_address`: The MAC address to analyze
-- `severity`: Minimum severity level (low/medium/high/critical)
-```
-
-The description after the colon is shown to users when they're prompted for input.
+Custom prompts are saved to `context/prompts/custom/` (gitignored) via the web UI's "Save as Custom" feature. They use the same frontmatter format and appear under the **Custom** section on the Prompts tab.
