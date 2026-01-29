@@ -36,17 +36,11 @@ def run(result: str):
     default_name = meta.get("name", "")
     default_desc = meta.get("description", "")
 
-    # Also check for suggested filename in the output
-    fname_match = re.search(r"[Ss]uggested filename[:\s]*`?([a-z0-9-]+\.md)`?", result)
-    suggested_slug = fname_match.group(1).replace(".md", "") if fname_match else ""
-
-    if not default_name and suggested_slug:
-        default_name = suggested_slug.replace("-", " ").title()
-
     st.subheader("Save as Custom Prompt")
 
+    default_id = meta.get("id", "")
     name = st.text_input("Name", value=default_name, key="pb_save_name")
-    auto_id = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") if name else suggested_slug
+    auto_id = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") if name else default_id
     prompt_id = st.text_input("ID", value=auto_id, key="pb_save_id")
     if prompt_id and not re.fullmatch(r"[a-z0-9-]+", prompt_id):
         st.warning("ID must contain only lowercase letters, numbers, and hyphens.")

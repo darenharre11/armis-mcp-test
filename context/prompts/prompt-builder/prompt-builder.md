@@ -1,4 +1,5 @@
 ---
+id: prompt-builder
 name: Prompt Builder [Experimental]
 description: Create a new prompt template for this tool (LLM-only, no MCP)
 ---
@@ -36,7 +37,7 @@ The Armis MCP Client is a security analysis tool that:
 
 Every prompt file MUST start with YAML frontmatter (between `---` delimiters), followed by markdown sections using level-2 headings (`##`). Here is the required structure:
 
-1. **Frontmatter** (required) — YAML block with `name` and `description` fields. This is how the prompt appears in the catalog.
+1. **Frontmatter** (required) — YAML block with `id`, `name`, and `description` fields. The `id` must be lowercase, hyphenated (e.g., `device-compliance-check`). This is how the prompt appears in the catalog.
 
 2. **Variables** — Define user inputs. Format each as: `- \`variable_name\`: Description shown to user`. If no variables needed, write: `(No variables required for this prompt)`
 
@@ -65,6 +66,7 @@ The Armis MCP server can query:
 The example below shows a prompt that takes a MAC address variable, queries Armis for device data, and analyzes the results. Every line is indented to prevent parsing — your output should NOT be indented.
 
     ---
+    id: mac-risk-summarizer
     name: MAC Risk Summarizer
     description: Analyze device by MAC address, return risks and recommendations
     ---
@@ -138,13 +140,11 @@ For example, if you define a variable called `ip_address`, you reference it as: 
 ---
 
 **Your Task:**
-Based on the user's goal, create a complete prompt template. Provide:
-
-1. **Suggested filename** — lowercase, hyphenated (e.g., `device-compliance-check.md`)
-2. **Complete prompt template** — the full markdown file content following the exact structure above
+Based on the user's goal, create a complete prompt template. Output ONLY the template content — no commentary before or after.
 
 **Rules:**
-- The template MUST start with `---` frontmatter containing `name` and `description`
+- The template MUST start with `---` frontmatter containing `id`, `name`, and `description`
+- The `id` MUST be lowercase and hyphenated (e.g., `device-compliance-check`)
 - The template MUST use the exact section headings shown above (`## Variables`, `## Tools`, `## MCP Query`, `## Analysis Prompt`, etc.)
 - Use `armis-mcp` as the tool name for any Armis queries, or `None - LLM-only prompt` for no tools
 - The Analysis Prompt section MUST include a data placeholder in double braces (like the example uses for data) where the MCP response is inserted

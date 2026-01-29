@@ -1,4 +1,5 @@
 ---
+id: my-prompt-id
 name: My Prompt Name
 description: Brief description of what it does
 ---

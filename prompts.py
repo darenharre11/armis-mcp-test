@@ -260,7 +260,7 @@ def save_custom_prompt(
     # Strip any existing frontmatter from content before prepending new one
     _, body = _parse_frontmatter(content)
     desc = description or "Custom prompt"
-    frontmatter = f"---\nname: {name}\ndescription: {desc}\n---\n\n"
+    frontmatter = f"---\nid: {prompt_id}\nname: {name}\ndescription: {desc}\n---\n\n"
     (prompt_dir / f"{prompt_id}.md").write_text(frontmatter + body)
     return prompt_id
 

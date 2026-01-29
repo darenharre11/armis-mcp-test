@@ -1,4 +1,5 @@
 ---
+id: mac-risk-summarizer
 name: MAC Risk Summarizer
 description: Analyze device by MAC address, return risks and recommendations
 ---
