@@ -90,7 +90,7 @@ armis-mcp-test/
 
 ## Prompt System
 
-Each prompt lives in its own directory under `context/prompts/{id}/{id}.md`. Metadata is stored as YAML frontmatter:
+Each prompt lives in its own directory under `context/prompts/{id}/prompt.md`. Metadata is stored as YAML frontmatter:
 
 ```markdown
 ---
@@ -129,8 +129,7 @@ How the LLM should structure its response...
 No Python code changes required:
 
 1. Copy the `_example/` directory: `cp -r context/prompts/_example context/prompts/my-prompt`
-2. Rename the `.md` file: `mv context/prompts/my-prompt/_example.md context/prompts/my-prompt/my-prompt.md`
-3. Edit the frontmatter (`id`, `name`, `description`) and fill in sections
+2. Edit the frontmatter (`id`, `name`, `description`) in `prompt.md` and fill in sections
 
 Or use the **Prompt Builder** in the web UI to generate a template and save it as a custom prompt.
 
@@ -148,9 +147,9 @@ Or use the **Prompt Builder** in the web UI to generate a template and save it a
 
 ### Companion Scripts
 
-A prompt can include an optional companion `.py` script that runs after the LLM responds. Place it in the same directory with the same name (e.g., `my-prompt/my-prompt.py`). It must export a `run(result: str)` function that receives the raw LLM output. Use Streamlit to render additional UI. Prompts with scripts show a `script` tag in the catalog.
+A prompt can include an optional companion `script.py` that runs after the LLM responds. Place it in the same directory as `prompt.md` (e.g., `my-prompt/script.py`). It must export a `run(result: str)` function that receives the raw LLM output. Use Streamlit to render additional UI. Prompts with scripts show a `script` tag in the catalog.
 
-See `context/prompts/_example/_example.py` for a minimal example.
+See `context/prompts/_example/script.py` for a minimal example.
 
 ### Custom Prompts
 

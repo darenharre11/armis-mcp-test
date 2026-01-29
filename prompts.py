@@ -62,7 +62,9 @@ def list_prompts() -> list[dict]:
     for d in sorted(PROMPTS_DIR.iterdir()):
         if not d.is_dir() or d.name in skip:
             continue
-        md = d / f"{d.name}.md"
+        md = d / "prompt.md"
+        if not md.exists():
+            md = d / f"{d.name}.md"  # legacy fallback
         if not md.exists():
             continue
         meta, _ = _parse_frontmatter(md.read_text())
@@ -72,19 +74,21 @@ def list_prompts() -> list[dict]:
             "id": d.name,
             "name": meta.get("name", d.name),
             "description": meta.get("description", ""),
-            "has_script": (d / f"{d.name}.py").exists(),
+            "has_script": (d / "script.py").exists() or (d / f"{d.name}.py").exists(),
         })
 
     return prompts
 
 
 def load_prompt(prompt_id: str) -> str | None:
-    """Read prompt from context/prompts/{id}/{id}.md or custom/{id}/{id}.md.
+    """Read prompt from context/prompts/{id}/prompt.md or custom/{id}/prompt.md.
 
     Strips frontmatter before returning content.
     """
     for base in [PROMPTS_DIR, CUSTOM_DIR]:
-        path = base / prompt_id / f"{prompt_id}.md"
+        path = base / prompt_id / "prompt.md"
+        if not path.exists():
+            path = base / prompt_id / f"{prompt_id}.md"  # legacy fallback
         if path.exists():
             _, body = _parse_frontmatter(path.read_text())
             return body
@@ -203,12 +207,14 @@ def parse_prompt(prompt_id: str, **variables) -> ParsedPrompt | None:
 
 
 def load_script(prompt_id: str):
-    """Load optional companion .py script for a prompt.
+    """Load optional companion script for a prompt.
 
-    Looks for context/prompts/{prompt_id}/{prompt_id}.py with a run(result: str) function.
+    Looks for context/prompts/{prompt_id}/script.py with a run(result: str) function.
     Returns the function, or None if no companion file exists.
     """
-    path = PROMPTS_DIR / prompt_id / f"{prompt_id}.py"
+    path = PROMPTS_DIR / prompt_id / "script.py"
+    if not path.exists():
+        path = PROMPTS_DIR / prompt_id / f"{prompt_id}.py"  # legacy fallback
     if not path.exists():
         return None
     import importlib.util
@@ -262,13 +268,14 @@ def save_custom_prompt(
     _, body = _parse_frontmatter(content)
     desc = description or "Custom prompt"
     frontmatter = f"---\nid: {prompt_id}\nname: {name}\ndescription: {desc}\n---\n\n"
-    (prompt_dir / f"{prompt_id}.md").write_text(frontmatter + body)
+    (prompt_dir / "prompt.md").write_text(frontmatter + body)
     return prompt_id
 
 
 def custom_prompt_exists(prompt_id: str) -> bool:
     """Check if a custom prompt with the given ID already exists."""
-    return (CUSTOM_DIR / prompt_id / f"{prompt_id}.md").exists()
+    d = CUSTOM_DIR / prompt_id
+    return (d / "prompt.md").exists() or (d / f"{prompt_id}.md").exists()
 
 
 def delete_custom_prompt(prompt_id: str) -> bool:
@@ -288,7 +295,9 @@ def list_custom_prompts() -> list[dict]:
     for d in sorted(CUSTOM_DIR.iterdir()):
         if not d.is_dir():
             continue
-        md = d / f"{d.name}.md"
+        md = d / "prompt.md"
+        if not md.exists():
+            md = d / f"{d.name}.md"  # legacy fallback
         if not md.exists():
             continue
         meta, body = _parse_frontmatter(md.read_text())
@@ -305,7 +314,7 @@ def list_custom_prompts() -> list[dict]:
             "name": name,
             "description": description,
             "custom": True,
-            "has_script": (d / f"{d.name}.py").exists(),
+            "has_script": (d / "script.py").exists() or (d / f"{d.name}.py").exists(),
         })
     return customs
 
