@@ -61,9 +61,7 @@ if st.session_state.pop("_switch_to_configure", False):
 if st.session_state.pop("_switch_to_prompts", False):
     st.session_state.active_tab = "Prompts"
 
-# Build tab list — Results only when results exist
-has_results = st.session_state.result is not None
-tab_options = ["Prompts", "Configure", "Results"] if has_results else ["Prompts", "Configure"]
+tab_options = ["Prompts", "Configure", "Results", "History"]
 
 if st.session_state.get("active_tab") not in tab_options:
     st.session_state.active_tab = "Prompts"
@@ -333,41 +331,52 @@ elif tab == "Configure":
                 st.session_state._switch_to_results = True
                 st.rerun()
 
-else:
-    history = st.session_state.history
-    # Pick which run to display
-    if len(history) > 1:
-        options = [f"{i + 1}. {h['label']}" for i, h in enumerate(history)]
-        selected_run = st.selectbox("Run history", options, index=0)
-        run_idx = int(selected_run.split(".")[0]) - 1
+elif tab == "Results":
+    if st.session_state.result is None:
+        st.info("No results yet. Run a prompt or query from the Configure tab.")
     else:
-        run_idx = 0
+        st.subheader(st.session_state.result_label)
+        st.markdown(st.session_state.result)
 
-    run = history[run_idx] if history else {
-        "label": st.session_state.result_label,
-        "result": st.session_state.result,
-        "prompt_id": st.session_state.result_prompt_id,
-        "log": st.session_state.status_log,
-    }
+        prompt_id = st.session_state.result_prompt_id
+        if prompt_id:
+            viz = load_script(prompt_id)
+            if viz:
+                st.divider()
+                viz(st.session_state.result)
 
-    st.subheader(run["label"])
-    st.markdown(run["result"])
+        if st.session_state.status_log:
+            with st.expander("Execution log"):
+                st.code("\n".join(st.session_state.status_log))
 
-    prompt_id = run["prompt_id"]
-    if prompt_id:
-        viz = load_script(prompt_id)
-        if viz:
-            st.divider()
-            viz(run["result"])
+        if st.button("New Analysis"):
+            st.session_state.result = None
+            st.session_state.result_prompt_id = None
+            st.session_state.result_label = None
+            st.session_state.status_log = []
+            st.session_state._switch_to_prompts = True
+            st.rerun()
 
-    if run["log"]:
-        with st.expander("Execution log"):
-            st.code("\n".join(run["log"]))
+else:  # History
+    history = st.session_state.history
+    if not history:
+        st.info("No history yet. Results from completed runs will appear here.")
+    else:
+        options = [f"{i + 1}. {h['label']}" for i, h in enumerate(history)]
+        selected_run = st.selectbox("Past runs", options, index=0)
+        run_idx = int(selected_run.split(".")[0]) - 1
+        run = history[run_idx]
 
-    if st.button("New Analysis"):
-        st.session_state.result = None
-        st.session_state.result_prompt_id = None
-        st.session_state.result_label = None
-        st.session_state.status_log = []
-        st.session_state._switch_to_prompts = True
-        st.rerun()
+        st.subheader(run["label"])
+        st.markdown(run["result"])
+
+        prompt_id = run["prompt_id"]
+        if prompt_id:
+            viz = load_script(prompt_id)
+            if viz:
+                st.divider()
+                viz(run["result"])
+
+        if run["log"]:
+            with st.expander("Execution log"):
+                st.code("\n".join(run["log"]))
