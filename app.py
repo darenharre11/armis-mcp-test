@@ -191,6 +191,25 @@ elif tab == "Configure":
                 log.append(f"[ERROR] {e}")
                 status_container.update(label="Failed", state="error")
                 st.error(f"Query failed: {e}")
+                st.session_state.history.insert(0, {
+                    "label": "Free-form Query",
+                    "result": f"**Run failed:** {e}",
+                    "prompt_id": None,
+                    "log": log,
+                    "status": "failed",
+                })
+                st.session_state.history = st.session_state.history[:5]
+            except BaseException:
+                log.append("[CANCELLED] Run interrupted")
+                st.session_state.history.insert(0, {
+                    "label": "Free-form Query",
+                    "result": "**Run cancelled** — interrupted by navigation.",
+                    "prompt_id": None,
+                    "log": log,
+                    "status": "cancelled",
+                })
+                st.session_state.history = st.session_state.history[:5]
+                raise
             else:
                 status_container.update(label="Complete", state="complete")
 
@@ -203,6 +222,7 @@ elif tab == "Configure":
                     "result": result,
                     "prompt_id": None,
                     "log": log,
+                    "status": "complete",
                 })
                 st.session_state.history = st.session_state.history[:5]
                 st.session_state._switch_to_results = True
@@ -296,6 +316,7 @@ elif tab == "Configure":
                 except Exception:
                     pass
 
+            label = prompt_map[selected_id]["name"]
             try:
                 if view == "edit":
                     result = run_async(
@@ -313,10 +334,28 @@ elif tab == "Configure":
                 log.append(f"[ERROR] {e}")
                 status_container.update(label="Failed", state="error")
                 st.error(f"Analysis failed: {e}")
+                st.session_state.history.insert(0, {
+                    "label": label,
+                    "result": f"**Run failed:** {e}",
+                    "prompt_id": selected_id,
+                    "log": log,
+                    "status": "failed",
+                })
+                st.session_state.history = st.session_state.history[:5]
+            except BaseException:
+                log.append("[CANCELLED] Run interrupted")
+                st.session_state.history.insert(0, {
+                    "label": label,
+                    "result": "**Run cancelled** — interrupted by navigation.",
+                    "prompt_id": selected_id,
+                    "log": log,
+                    "status": "cancelled",
+                })
+                st.session_state.history = st.session_state.history[:5]
+                raise
             else:
                 status_container.update(label="Complete", state="complete")
 
-                label = prompt_map[selected_id]["name"]
                 st.session_state.result = result
                 st.session_state.result_prompt_id = selected_id
                 st.session_state.result_label = label
@@ -326,6 +365,7 @@ elif tab == "Configure":
                     "result": result,
                     "prompt_id": selected_id,
                     "log": log,
+                    "status": "complete",
                 })
                 st.session_state.history = st.session_state.history[:5]
                 st.session_state._switch_to_results = True
@@ -362,7 +402,11 @@ else:  # History
     if not history:
         st.info("No history yet. Results from completed runs will appear here.")
     else:
-        options = [f"{i + 1}. {h['label']}" for i, h in enumerate(history)]
+        status_tags = {"cancelled": " [cancelled]", "failed": " [failed]"}
+        options = [
+            f"{i + 1}. {h['label']}{status_tags.get(h.get('status'), '')}"
+            for i, h in enumerate(history)
+        ]
         selected_run = st.selectbox("Past runs", options, index=0)
         run_idx = int(selected_run.split(".")[0]) - 1
         run = history[run_idx]
@@ -371,7 +415,7 @@ else:  # History
         st.markdown(run["result"])
 
         prompt_id = run["prompt_id"]
-        if prompt_id:
+        if prompt_id and run.get("status") not in ("cancelled", "failed"):
             viz = load_script(prompt_id)
             if viz:
                 st.divider()
