@@ -1,3 +1,5 @@
+import asyncio
+
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
@@ -70,7 +72,9 @@ class ArmisMCPClient:
 
     async def call_tool(self, name: str, arguments: dict) -> str:
         """Call an MCP tool and return the result as a string."""
-        result = await self._session.call_tool(name, arguments)
+        result = await self._with_heartbeat(
+            self._session.call_tool(name, arguments), label=f"MCP:{name}"
+        )
         if result.content:
             parts = []
             for item in result.content:
@@ -80,6 +84,25 @@ class ArmisMCPClient:
                     parts.append(str(item))
             return "\n".join(parts)
         return ""
+
+    async def _with_heartbeat(self, coro, label="MCP", interval=5):
+        """Run a coroutine with periodic heartbeat status messages."""
+        async def heartbeat():
+            elapsed = 0
+            while True:
+                await asyncio.sleep(interval)
+                elapsed += interval
+                self._status(f"  [{label}] Still waiting... ({elapsed}s)")
+
+        task = asyncio.create_task(heartbeat())
+        try:
+            return await coro
+        finally:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
     async def query(self, query_text: str) -> str:
         """
