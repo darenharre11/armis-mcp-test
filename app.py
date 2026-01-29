@@ -3,9 +3,11 @@
 import asyncio
 import re
 
+import ollama
 import streamlit as st
 
 import config
+from mcp_client import ArmisMCPClient
 from history import clear_history, get_run, list_runs, save_run, update_run
 from main import run_custom_analysis, run_freeform_query, run_prompt_analysis
 from prompts import (
@@ -61,7 +63,7 @@ if st.session_state.pop("_switch_to_configure", False):
 if st.session_state.pop("_switch_to_prompts", False):
     st.session_state.active_tab = "Prompts"
 
-tab_options = ["Prompts", "Configure", "Results", "History"]
+tab_options = ["Prompts", "Configure", "Results", "History", "Status"]
 
 if st.session_state.get("active_tab") not in tab_options:
     st.session_state.active_tab = "Prompts"
@@ -374,6 +376,47 @@ elif tab == "Results":
             st.session_state.status_log = []
             st.session_state._switch_to_prompts = True
             st.rerun()
+
+elif tab == "Status":
+    st.subheader("Configuration")
+    with st.container(border=True):
+        st.text(f"Armis MCP URL:  {config.ARMIS_MCP_URL}")
+        masked_key = f"{'*' * (len(config.ARMIS_API_KEY) - 4)}{config.ARMIS_API_KEY[-4:]}"
+        st.text(f"API Key:        {masked_key}")
+        st.text(f"Ollama Model:   {config.OLLAMA_MODEL}")
+
+    st.subheader("Connection Health")
+    if st.button("Test Connections", type="primary"):
+        # Ollama check
+        try:
+            response = ollama.list()
+            model_names = [m.model for m in response.models]
+            if config.OLLAMA_MODEL in model_names:
+                st.success(f"Ollama: connected -- model `{config.OLLAMA_MODEL}` available")
+            else:
+                # Try matching without tag (e.g. "mistral" matches "mistral:latest")
+                base_matches = [n for n in model_names if n.split(":")[0] == config.OLLAMA_MODEL]
+                if base_matches:
+                    st.success(f"Ollama: connected -- model `{base_matches[0]}` available")
+                else:
+                    st.error(
+                        f"Ollama: connected but model `{config.OLLAMA_MODEL}` not found. "
+                        f"Available: {', '.join(model_names)}"
+                    )
+        except Exception as e:
+            st.error(f"Ollama: unreachable -- {e}")
+
+        # Armis MCP check
+        try:
+            async def _check_mcp():
+                async with ArmisMCPClient(on_status=lambda _: None) as client:
+                    return await client.list_tools()
+
+            tools = run_async(_check_mcp())
+            tool_names = [t.name for t in tools]
+            st.success(f"Armis MCP: connected -- {len(tools)} tool(s): {', '.join(tool_names)}")
+        except Exception as e:
+            st.error(f"Armis MCP: unreachable -- {e}")
 
 else:  # History
     runs = list_runs()
