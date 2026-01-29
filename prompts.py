@@ -55,8 +55,8 @@ def list_prompts() -> list[dict]:
 
 
 def load_prompt(prompt_id: str) -> str | None:
-    """Read individual prompt from context/prompts/{id}.md"""
-    path = PROMPTS_DIR / f"{prompt_id}.md"
+    """Read individual prompt from context/prompts/{id}/{id}.md"""
+    path = PROMPTS_DIR / prompt_id / f"{prompt_id}.md"
     if path.exists():
         return path.read_text()
     return None
@@ -168,6 +168,22 @@ def parse_prompt(prompt_id: str, **variables) -> ParsedPrompt | None:
         analysis_prompt=analysis_prompt,
         full_content=template,
     )
+
+
+def load_visualizer(prompt_id: str):
+    """Load optional companion .py visualizer for a prompt.
+
+    Looks for context/prompts/{prompt_id}.py with a visualize(result: str) function.
+    Returns the function, or None if no companion file exists.
+    """
+    path = PROMPTS_DIR / prompt_id / f"{prompt_id}.py"
+    if not path.exists():
+        return None
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(f"viz_{prompt_id}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return getattr(module, "visualize", None)
 
 
 def build_prompt(prompt_id: str, **variables) -> str | None:
