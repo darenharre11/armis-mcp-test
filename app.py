@@ -110,7 +110,8 @@ if tab == "Prompts":
         st.divider()
         for i, p in enumerate(prebuilt_catalog):
             col_name, col_desc, col_sel, col_del = st.columns([2, 4, 1, 1])
-            col_name.write(p["name"])
+            label = f"{p['name']}  `script`" if p.get("has_script") else p["name"]
+            col_name.write(label)
             col_desc.write(p["description"])
             if col_sel.button("Select", key=f"sel_{p['id']}"):
                 _select_prompt(p["id"])
@@ -129,7 +130,8 @@ if tab == "Prompts":
             st.divider()
             for i, p in enumerate(custom_prompts):
                 col_name, col_desc, col_sel, col_del = st.columns([2, 4, 1, 1])
-                col_name.write(p["name"])
+                label = f"{p['name']}  `script`" if p.get("has_script") else p["name"]
+                col_name.write(label)
                 col_desc.write(p["description"])
                 if col_sel.button("Select", key=f"sel_{p['id']}"):
                     _select_prompt(p["id"])

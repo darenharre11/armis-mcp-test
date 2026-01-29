@@ -1,7 +1,7 @@
 ---
 id: prompt-builder
 name: Prompt Builder [Experimental]
-description: Create a new prompt template for this tool (LLM-only, no MCP)
+description: Create a new prompt template for this tool (LLM-only, no MCP). Script extracts the generated template and provides a save-to-custom UI.
 ---
 
 # Prompt Builder

@@ -72,6 +72,7 @@ def list_prompts() -> list[dict]:
             "id": d.name,
             "name": meta.get("name", d.name),
             "description": meta.get("description", ""),
+            "has_script": (d / f"{d.name}.py").exists(),
         })
 
     return prompts
@@ -304,6 +305,7 @@ def list_custom_prompts() -> list[dict]:
             "name": name,
             "description": description,
             "custom": True,
+            "has_script": (d / f"{d.name}.py").exists(),
         })
     return customs
 
