@@ -8,10 +8,10 @@ import sys
 import config
 from llm import analyze_data, query_with_tools
 from mcp_client import ArmisMCPClient
-from prompts import build_system_prompt, extract_variables, list_prompts, parse_prompt
+from prompts import build_system_prompt, extract_variables, list_prompts, parse_content, parse_prompt
 
 
-async def run_prompt_analysis(prompt_id: str, **variables) -> None:
+async def run_prompt_analysis(prompt_id: str, on_status=None, **variables) -> str:
     """
     Run any prompt-based analysis.
 
@@ -26,52 +26,59 @@ async def run_prompt_analysis(prompt_id: str, **variables) -> None:
 
     Args:
         prompt_id: The prompt ID (filename without .md extension)
+        on_status: Callback for progress messages (default: print)
         **variables: Variable substitutions for the prompt template
+
+    Returns:
+        The LLM analysis result string.
     """
-    print("\n" + "=" * 60)
-    print(f"[ANALYSIS] Starting analysis with prompt: {prompt_id}")
+    if on_status is None:
+        on_status = print
+
+    on_status("\n" + "=" * 60)
+    on_status(f"[ANALYSIS] Starting analysis with prompt: {prompt_id}")
     for key, value in variables.items():
-        print(f"[ANALYSIS] {key}: {value}")
-    print("=" * 60)
+        on_status(f"[ANALYSIS] {key}: {value}")
+    on_status("=" * 60)
 
     # Parse the prompt template
     parsed = parse_prompt(prompt_id, **variables)
     if parsed is None:
-        print(f"[ERROR] Prompt '{prompt_id}' not found", file=sys.stderr)
-        sys.exit(1)
+        on_status(f"[ERROR] Prompt '{prompt_id}' not found")
+        return f"Error: Prompt '{prompt_id}' not found"
 
-    print(f"\n[PROMPT] Loaded: {prompt_id}")
+    on_status(f"\n[PROMPT] Loaded: {prompt_id}")
 
-    # Check if this is an LLM-only prompt (no MCP query)
-    if parsed.mcp_query is None:
-        print("[PROMPT] LLM-only mode (no MCP query)")
+    # Check if this is an LLM-only prompt (no MCP query or no tools declared)
+    if parsed.mcp_query is None or not parsed.tools:
+        on_status("[PROMPT] LLM-only mode (no MCP query)")
 
         # Send analysis prompt directly to LLM
-        print("\n" + "=" * 60)
-        print("[LLM] Sending prompt to LLM...")
-        print(f"[LLM] Model: {config.OLLAMA_MODEL}")
-        print(f"[LLM] System prompt: {len(build_system_prompt())} chars")
-        print(f"[LLM] Analysis prompt: {len(parsed.analysis_prompt)} chars")
-        print("=" * 60)
+        on_status("\n" + "=" * 60)
+        on_status("[LLM] Sending prompt to LLM...")
+        on_status(f"[LLM] Model: {config.OLLAMA_MODEL}")
+        on_status(f"[LLM] System prompt: {len(build_system_prompt())} chars")
+        on_status(f"[LLM] Analysis prompt: {len(parsed.analysis_prompt)} chars")
+        on_status("=" * 60)
 
         system_prompt = build_system_prompt()
-        result = analyze_data(system_prompt, parsed.analysis_prompt)
+        result = analyze_data(system_prompt, parsed.analysis_prompt, on_status=on_status)
 
-        print("\n" + "=" * 60)
-        print("[RESULT] Analysis complete")
-        print("=" * 60)
-        print("\n" + result)
-        return
+        on_status("\n" + "=" * 60)
+        on_status("[RESULT] Analysis complete")
+        on_status("=" * 60)
+        on_status("\n" + result)
+        return result
 
-    print(f"[PROMPT] MCP Query extracted ({len(parsed.mcp_query)} chars)")
+    on_status(f"[PROMPT] MCP Query extracted ({len(parsed.mcp_query)} chars)")
 
     # Connect to MCP and fetch device data
-    async with ArmisMCPClient() as client:
+    async with ArmisMCPClient(on_status=on_status) as client:
         # Step 1: Query MCP directly with the deterministic query
         mcp_data = await client.query(parsed.mcp_query)
 
         if not mcp_data.strip():
-            print("[WARNING] MCP returned empty response")
+            on_status("[WARNING] MCP returned empty response")
             mcp_data = "No data returned from Armis."
 
         # Step 2: Build the analysis prompt with the fetched data
@@ -83,48 +90,101 @@ async def run_prompt_analysis(prompt_id: str, **variables) -> None:
             )
 
         # Step 3: Send to LLM for analysis
-        print("\n" + "=" * 60)
-        print("[LLM] Sending data to LLM for analysis...")
-        print(f"[LLM] Model: {config.OLLAMA_MODEL}")
-        print(f"[LLM] System prompt: {len(build_system_prompt())} chars")
-        print(f"[LLM] Analysis prompt: {len(analysis_prompt)} chars")
-        print("=" * 60)
+        on_status("\n" + "=" * 60)
+        on_status("[LLM] Sending data to LLM for analysis...")
+        on_status(f"[LLM] Model: {config.OLLAMA_MODEL}")
+        on_status(f"[LLM] System prompt: {len(build_system_prompt())} chars")
+        on_status(f"[LLM] Analysis prompt: {len(analysis_prompt)} chars")
+        on_status("=" * 60)
 
         system_prompt = build_system_prompt()
-        result = analyze_data(system_prompt, analysis_prompt)
+        result = analyze_data(system_prompt, analysis_prompt, on_status=on_status)
 
-        print("\n" + "=" * 60)
-        print("[RESULT] Analysis complete")
-        print("=" * 60)
-        print("\n" + result)
+        on_status("\n" + "=" * 60)
+        on_status("[RESULT] Analysis complete")
+        on_status("=" * 60)
+        on_status("\n" + result)
+        return result
 
 
-async def run_mac_analysis(mac_address: str) -> None:
+async def run_custom_analysis(content: str, on_status=None) -> str:
+    """Run analysis from raw prompt content (edited/custom prompt)."""
+    if on_status is None:
+        on_status = print
+
+    on_status("\n" + "=" * 60)
+    on_status("[ANALYSIS] Running custom/edited prompt")
+    on_status("=" * 60)
+
+    parsed = parse_content(content)
+
+    if parsed.mcp_query is None or not parsed.tools:
+        on_status("[PROMPT] LLM-only mode (no MCP query)")
+        on_status("[LLM] Sending prompt to LLM...")
+        system_prompt = build_system_prompt()
+        result = analyze_data(system_prompt, parsed.analysis_prompt, on_status=on_status)
+        on_status("[RESULT] Analysis complete")
+        return result
+
+    on_status(f"[PROMPT] MCP Query extracted ({len(parsed.mcp_query)} chars)")
+
+    async with ArmisMCPClient(on_status=on_status) as client:
+        mcp_data = await client.query(parsed.mcp_query)
+
+        if not mcp_data.strip():
+            on_status("[WARNING] MCP returned empty response")
+            mcp_data = "No data returned from Armis."
+
+        analysis_prompt = parsed.analysis_prompt
+        for placeholder in ["device_data", "data", "mcp_data", "result"]:
+            analysis_prompt = analysis_prompt.replace(
+                f"{{{{{placeholder}}}}}", mcp_data
+            )
+
+        on_status("[LLM] Sending data to LLM for analysis...")
+        system_prompt = build_system_prompt()
+        result = analyze_data(system_prompt, analysis_prompt, on_status=on_status)
+        on_status("[RESULT] Analysis complete")
+        return result
+
+
+async def run_mac_analysis(mac_address: str, on_status=None) -> str:
     """Run MAC address risk analysis (convenience wrapper)."""
-    await run_prompt_analysis("mac-risk-summarizer", mac_address=mac_address)
+    return await run_prompt_analysis(
+        "mac-risk-summarizer", on_status=on_status, mac_address=mac_address
+    )
 
 
-async def run_freeform_query(question: str) -> None:
+async def run_freeform_query(question: str, on_status=None) -> str:
     """
     Run a free-form question using LLM-driven tool calling.
 
     For open-ended questions, the LLM decides what to query.
+
+    Returns:
+        The LLM result string.
     """
-    print("\n" + "=" * 60)
-    print(f"[QUERY] Free-form question mode")
-    print(f"[QUERY] Question: {question}")
-    print("=" * 60)
+    if on_status is None:
+        on_status = print
+
+    on_status("\n" + "=" * 60)
+    on_status(f"[QUERY] Free-form question mode")
+    on_status(f"[QUERY] Question: {question}")
+    on_status("=" * 60)
 
     system_prompt = build_system_prompt()
 
-    async with ArmisMCPClient() as client:
-        print("\n[LLM] Starting tool-calling loop...")
-        result = await query_with_tools(client, system_prompt, question)
+    async with ArmisMCPClient(on_status=on_status) as client:
+        on_status("\n[LLM] Starting tool-calling loop...")
+        result = await query_with_tools(
+            client, system_prompt, question, on_status=on_status
+        )
 
-        print("\n" + "=" * 60)
-        print("[RESULT] Query complete")
-        print("=" * 60)
-        print("\n" + result)
+        on_status("\n" + "=" * 60)
+        on_status("[RESULT] Query complete")
+        on_status("=" * 60)
+        on_status("\n" + result)
+        return result
 
 
 def display_menu(prompts: list[dict]) -> None:

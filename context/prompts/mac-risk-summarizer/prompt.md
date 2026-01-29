@@ -1,3 +1,9 @@
+---
+id: mac-risk-summarizer
+name: MAC Risk Summarizer
+description: Analyze device by MAC address, return risks and recommendations
+---
+
 # MAC Risk Summarizer
 
 ## Variables
@@ -10,7 +16,9 @@
 
 ## MCP Query
 
-Get all device information for the device with MAC address {{mac_address}}. Include:
+Get all device information for the device with MAC address {{mac_address}}. 
+
+Include:
 - Device type, category, and manufacturer
 - Operating system and version
 - First seen and last seen timestamps

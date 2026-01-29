@@ -6,29 +6,39 @@ from mcp_client import ArmisMCPClient
 MAX_TOOL_ITERATIONS = 5
 
 
-def analyze_data(system_prompt: str, user_prompt: str) -> str:
+def analyze_data(system_prompt: str, user_prompt: str, on_status=None) -> str:
     """
     Query Ollama to analyze data without tool calling.
 
     Use this when data has already been fetched from MCP and just needs analysis.
     """
+    if on_status is None:
+        on_status = lambda _: None
+
+    on_status("  [LLM] Waiting for model response...")
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
 
-    response = ollama.chat(
-        model=config.OLLAMA_MODEL,
-        messages=messages,
-    )
+    chunks = []
+    char_count = 0
+    for chunk in ollama.chat(model=config.OLLAMA_MODEL, messages=messages, stream=True):
+        text = chunk["message"].get("content", "")
+        chunks.append(text)
+        char_count += len(text)
+        if char_count % 500 < len(text):
+            on_status(f"  [LLM] Generating... ({char_count} chars)")
 
-    return response["message"].get("content", "")
+    on_status(f"  [LLM] Response complete ({char_count} chars)")
+    return "".join(chunks)
 
 
 async def query_with_tools(
     client: ArmisMCPClient,
     system_prompt: str,
     user_prompt: str,
+    on_status=None,
 ) -> str:
     """
     Query Ollama with MCP tools available.
@@ -42,6 +52,9 @@ async def query_with_tools(
     Note: For deterministic data fetching, prefer using mcp_client.query()
     directly and then analyze_data() instead of this function.
     """
+    if on_status is None:
+        on_status = print
+
     tools = await client.get_ollama_tools()
 
     messages = [
@@ -50,7 +63,8 @@ async def query_with_tools(
     ]
 
     for iteration in range(MAX_TOOL_ITERATIONS):
-        print(f"  [LLM] Iteration {iteration + 1}/{MAX_TOOL_ITERATIONS}...")
+        on_status(f"  [LLM] Iteration {iteration + 1}/{MAX_TOOL_ITERATIONS}...")
+        on_status("  [LLM] Waiting for model response...")
 
         response = ollama.chat(
             model=config.OLLAMA_MODEL,
@@ -65,27 +79,27 @@ async def query_with_tools(
         if not tool_calls:
             return assistant_message.get("content", "")
 
-        print(f"  [LLM] Executing {len(tool_calls)} tool call(s)...")
+        on_status(f"  [LLM] Executing {len(tool_calls)} tool call(s)...")
 
         for tool_call in tool_calls:
             func = tool_call["function"]
             tool_name = func["name"]
             tool_args = func.get("arguments", {})
 
-            print(f"    - Calling: {tool_name}")
+            on_status(f"    - Calling: {tool_name}")
 
             try:
                 result = await client.call_tool(tool_name, tool_args)
                 preview = result[:200] + "..." if len(result) > 200 else result
-                print(f"    - Result: {len(result)} chars")
+                on_status(f"    - Result: {len(result)} chars")
             except Exception as e:
                 result = f"Error calling tool: {e}"
-                print(f"    - Error: {e}")
+                on_status(f"    - Error: {e}")
 
             messages.append({
                 "role": "tool",
                 "content": result,
             })
 
-    print("  [LLM] Max iterations reached.")
+    on_status("  [LLM] Max iterations reached.")
     return messages[-1].get("content", "") if messages else ""

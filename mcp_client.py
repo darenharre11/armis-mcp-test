@@ -1,3 +1,5 @@
+import asyncio
+
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
@@ -19,18 +21,19 @@ def mcp_tool_to_ollama(tool) -> dict:
 class ArmisMCPClient:
     """Async context manager for Armis MCP server connection."""
 
-    def __init__(self):
+    def __init__(self, on_status=print):
         self._session = None
         self._read = None
         self._write = None
         self._cm = None
         self._tools = None
+        self._status = on_status
 
     async def __aenter__(self):
-        print("\n" + "=" * 60)
-        print("[MCP] Connecting to Armis MCP server...")
-        print(f"[MCP] URL: {config.ARMIS_MCP_URL}")
-        print("=" * 60)
+        self._status("\n" + "=" * 60)
+        self._status("[MCP] Connecting to Armis MCP server...")
+        self._status(f"[MCP] URL: {config.ARMIS_MCP_URL}")
+        self._status("=" * 60)
 
         self._cm = streamablehttp_client(
             config.ARMIS_MCP_URL,
@@ -43,10 +46,10 @@ class ArmisMCPClient:
 
         # Verify connection by listing tools
         tools = await self.list_tools()
-        print(f"[MCP] Connected. {len(tools)} tool(s) available:")
+        self._status(f"[MCP] Connected. {len(tools)} tool(s) available:")
         for tool in tools:
-            print(f"      - {tool.name}: {tool.description or 'No description'}")
-        print("=" * 60 + "\n")
+            self._status(f"      - {tool.name}: {tool.description or 'No description'}")
+        self._status("=" * 60 + "\n")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -69,7 +72,9 @@ class ArmisMCPClient:
 
     async def call_tool(self, name: str, arguments: dict) -> str:
         """Call an MCP tool and return the result as a string."""
-        result = await self._session.call_tool(name, arguments)
+        result = await self._with_heartbeat(
+            self._session.call_tool(name, arguments), label=f"MCP:{name}"
+        )
         if result.content:
             parts = []
             for item in result.content:
@@ -79,6 +84,25 @@ class ArmisMCPClient:
                     parts.append(str(item))
             return "\n".join(parts)
         return ""
+
+    async def _with_heartbeat(self, coro, label="MCP", interval=5):
+        """Run a coroutine with periodic heartbeat status messages."""
+        async def heartbeat():
+            elapsed = 0
+            while True:
+                await asyncio.sleep(interval)
+                elapsed += interval
+                self._status(f"  [{label}] Still waiting... ({elapsed}s)")
+
+        task = asyncio.create_task(heartbeat())
+        try:
+            return await coro
+        finally:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
     async def query(self, query_text: str) -> str:
         """
@@ -114,29 +138,29 @@ class ArmisMCPClient:
             # Fallback: try with "query" as default
             param_name = "query"
 
-        print("\n" + "-" * 60)
-        print("[MCP] Sending query to Armis...")
-        print(f"[MCP] Tool: {tool_name}")
-        print(f"[MCP] Query:")
+        self._status("\n" + "-" * 60)
+        self._status("[MCP] Sending query to Armis...")
+        self._status(f"[MCP] Tool: {tool_name}")
+        self._status("[MCP] Query:")
         # Print query with indentation for readability
         for line in query_text.strip().split("\n"):
-            print(f"      {line}")
-        print("-" * 60)
+            self._status(f"      {line}")
+        self._status("-" * 60)
 
         # Call the tool
         result = await self.call_tool(tool_name, {param_name: query_text})
 
-        print("\n" + "-" * 60)
-        print(f"[MCP] Response received ({len(result)} characters)")
-        print("[MCP] Response preview:")
+        self._status("\n" + "-" * 60)
+        self._status(f"[MCP] Response received ({len(result)} characters)")
+        self._status("[MCP] Response preview:")
         # Show first 500 chars as preview
         preview = result[:500]
         if len(result) > 500:
             preview += f"\n... ({len(result) - 500} more characters)"
         for line in preview.split("\n")[:15]:  # Limit to 15 lines
-            print(f"      {line}")
+            self._status(f"      {line}")
         if preview.count("\n") > 15:
-            print(f"      ... (more lines)")
-        print("-" * 60 + "\n")
+            self._status("      ... (more lines)")
+        self._status("-" * 60 + "\n")
 
         return result

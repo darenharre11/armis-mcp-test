@@ -34,71 +34,66 @@ A Python client that connects to the Armis MCP server and uses Ollama locally fo
 
 ## Usage
 
-### Analyze a device by MAC address
-
 ```bash
-python main.py --mac AA:BB:CC:DD:EE:FF
+uv run streamlit run app.py
 ```
 
-### Ask a free-form question
+The Streamlit UI has four tabs:
+
+- **Prompts** -- browse prebuilt and custom prompts, delete custom ones
+- **Configure** -- fill in variables, edit/preview the prompt, and run
+- **Results** -- view the latest output with companion script visualizations
+- **History** -- past runs persisted to disk, survives page refreshes and cancellations
+
+### CLI
 
 ```bash
-python main.py --query "How many critical vulnerabilities are in my environment?"
-python main.py -q "Show me all Windows devices"
+python main.py --mac AA:BB:CC:DD:EE:FF                                    # analyze device by MAC
+python main.py --query "How many critical vulnerabilities are there?"      # free-form query
+python main.py --interactive                                               # interactive menu
 ```
-
-### Interactive mode
-
-```bash
-python main.py --interactive
-```
-
-Select from available prompts and provide required inputs. Use `l` to list available prompts at any time.
-
-## Available Prompts
-
-| ID | Name | Description |
-|----|------|-------------|
-| mac-risk-summarizer | MAC Risk Summarizer | Analyze device by MAC address, return risks and recommendations |
-| cve-volume-top5 | Top 5 CVEs by Volume | Get the top 5 CVEs affecting the most devices |
 
 ## Project Structure
 
 ```
 armis-mcp-test/
 ├── main.py           # CLI entry point
+├── app.py            # Streamlit web interface
 ├── mcp_client.py     # MCP server connection
 ├── llm.py            # Ollama integration with tool calling
 ├── prompts.py        # Context and prompt loading
+├── history.py        # Disk-persisted run history
 ├── config.py         # Environment configuration
 └── context/
     ├── Role.md       # Agent persona
     ├── Rules.md      # Behavioral constraints
-    ├── Prompts.md    # Prompt index
+    ├── history/      # Run history JSON files (gitignored)
     └── prompts/      # Individual prompt templates
-        ├── mac-risk-summarizer.md
-        ├── cve-volume-top5.md
-        └── _example.md   # Template for creating new prompts
+        ├── _example/             # Template for creating new prompts
+        ├── mac-risk-summarizer/
+        ├── cve-volume-top5/
+        ├── prompt-builder/
+        └── custom/               # User-created prompts (gitignored)
 ```
 
-## Adding New Prompts
+## Prompt System
 
-Adding new prompts requires **no Python code changes**. Simply:
-
-1. Create a new file in `context/prompts/` (e.g., `my-prompt.md`)
-2. Add an entry to the table in `context/Prompts.md`
-
-The system automatically parses variables from your prompt file and prompts users for input in interactive mode.
-
-### Prompt Template Format
-
-See `context/prompts/_example.md` for a complete template. The basic structure is:
+Each prompt lives in its own directory under `context/prompts/{id}/prompt.md`. Metadata is stored as YAML frontmatter:
 
 ```markdown
-# Prompt Name
+---
+id: my-prompt-id
+name: My Prompt Name
+description: Brief description of what it does
+---
+
+# My Prompt Name
 
 ## Variables
 - `variable_name`: Description shown to user when prompted
+
+## Tools
+- `armis-mcp`: Query device data from Armis
 
 ## MCP Query
 The query sent to Armis MCP server.
@@ -117,24 +112,33 @@ What the LLM should analyze...
 How the LLM should structure its response...
 ```
 
+### Adding New Prompts
+
+No Python code changes required:
+
+1. Copy the `_example/` directory: `cp -r context/prompts/_example context/prompts/my-prompt`
+2. Edit the frontmatter (`id`, `name`, `description`) in `prompt.md` and fill in sections
+
+Or use the **Prompt Builder** in the web UI to generate a template and save it as a custom prompt.
+
 ### Key Sections
 
 | Section | Required | Purpose |
 |---------|----------|---------|
+| Frontmatter | Yes | `id`, `name`, and `description` for catalog display |
 | Variables | No | Defines inputs collected from the user. Omit for prompts with no inputs. |
-| MCP Query | Yes | The query sent to Armis to fetch data |
-| Analysis Prompt | Yes | Instructions for the LLM (must include `{{data}}` placeholder) |
+| Tools | No | MCP/tool dependencies. Use `None` for LLM-only prompts. |
+| MCP Query | No | The query sent to Armis to fetch data. Omit for LLM-only prompts. |
+| Analysis Prompt | Yes | Instructions for the LLM (must include `{{data}}` placeholder if using MCP) |
 | Required Analysis | No | Detailed analysis requirements |
 | Output Format | No | Structure for the LLM's response |
 
-### Variable Format
+### Companion Scripts
 
-Variables are defined as a markdown list with backtick-quoted names:
+A prompt can include an optional companion `script.py` that runs after the LLM responds. Place it in the same directory as `prompt.md` (e.g., `my-prompt/script.py`). It must export a `run(result: str)` function that receives the raw LLM output. Use Streamlit to render additional UI. Prompts with scripts show a `script` tag in the catalog.
 
-```markdown
-## Variables
-- `mac_address`: The MAC address to analyze
-- `severity`: Minimum severity level (low/medium/high/critical)
-```
+See `context/prompts/_example/script.py` for a minimal example.
 
-The description after the colon is shown to users when they're prompted for input.
+### Custom Prompts
+
+Custom prompts are saved to `context/prompts/custom/` (gitignored) via the web UI's "Save as Custom" feature. They use the same frontmatter format and appear under the **Custom** section on the Prompts tab.

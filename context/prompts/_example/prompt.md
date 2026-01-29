@@ -1,16 +1,36 @@
+---
+id: my-prompt-id
+name: My Prompt Name
+description: Brief description of what it does
+---
+
 # Example Prompt Template
 
-This is a template for creating new prompts. Copy this file and rename it to your prompt ID (e.g., `my-new-prompt.md`).
+This is a template for creating new prompts. Copy this directory and rename it to your prompt ID.
 
 **To add a new prompt:**
-1. Copy this file: `cp _example.md my-prompt-id.md`
-2. Edit the new file with your prompt content
-3. Add an entry to `../Prompts.md`:
-   ```
-   | my-prompt-id | My Prompt Name | Brief description of what it does |
-   ```
+1. Copy this directory: `cp -r _example my-prompt-id`
+2. Edit the frontmatter `id`, `name`, and `description` fields in `prompt.md`
+3. Fill in the sections below
+4. (Optional) Add a companion script — see "Companion Scripts" below
 
----
+## Companion Scripts
+
+A prompt can have an optional companion `script.py` that runs after the LLM responds. The script must:
+- Live in the same directory as `prompt.md`
+- Be named `script.py`
+- Export a `run(result: str)` function
+
+The `result` argument is the raw LLM output text. Use Streamlit (`st`) to render any extra UI. Prompts with scripts show a `script` tag in the catalog.
+
+Example (`script.py`):
+```python
+import streamlit as st
+
+def run(result: str):
+    words = len(result.split())
+    st.caption(f"Response length: {words} words")
+```
 
 ## Variables
 

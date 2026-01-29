@@ -1,0 +1,66 @@
+"""Companion script for prompt-builder: extracts generated template and offers save-to-custom."""
+
+import re
+
+import streamlit as st
+
+from prompts import _parse_frontmatter, custom_prompt_exists, save_custom_prompt
+
+
+def _extract_template(result: str) -> str | None:
+    """Extract the prompt template from LLM output.
+
+    Tries in order:
+    1. Fenced ```markdown code block
+    2. First YAML frontmatter block (starts with ---)
+    """
+    # Try fenced code block first
+    match = re.search(r"```markdown\s*\n(.*?)```", result, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    # Fall back to finding frontmatter start
+    idx = result.find("---\n")
+    if idx != -1:
+        return result[idx:].strip()
+    return None
+
+
+def run(result: str):
+    """Parse LLM output for a prompt template and provide save UI."""
+    template = _extract_template(result)
+    if not template:
+        return
+
+    # Read name/description from frontmatter if present
+    meta, _ = _parse_frontmatter(template)
+    default_name = meta.get("name", "")
+    default_desc = meta.get("description", "")
+
+    st.subheader("Save as Custom Prompt")
+
+    default_id = meta.get("id", "")
+    name = st.text_input("Name", value=default_name, key="pb_save_name")
+    auto_id = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") if name else default_id
+    prompt_id = st.text_input("ID", value=auto_id, key="pb_save_id")
+    if prompt_id and not re.fullmatch(r"[a-z0-9-]+", prompt_id):
+        st.warning("ID must contain only lowercase letters, numbers, and hyphens.")
+    description = st.text_input("Description", value=default_desc, key="pb_save_desc")
+    content = st.text_area("Template", value=template, height=300, key="pb_save_content")
+
+    exists = prompt_id and custom_prompt_exists(prompt_id.strip())
+    if exists:
+        st.warning(f"Prompt '{prompt_id}' already exists.")
+        confirm = st.checkbox("Overwrite existing prompt", key="pb_save_overwrite")
+    else:
+        confirm = True
+    valid = name.strip() and prompt_id and re.fullmatch(r"[a-z0-9-]+", prompt_id) and confirm
+    if st.button("Save Prompt", disabled=not valid) and valid:
+        save_custom_prompt(
+            name.strip(),
+            content,
+            prompt_id=prompt_id.strip(),
+            description=description.strip(),
+        )
+        st.session_state._show_save_toast = True
+        st.session_state._switch_to_prompts = True
+        st.rerun()
