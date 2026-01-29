@@ -1,4 +1,5 @@
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -262,6 +263,15 @@ def save_custom_prompt(
     frontmatter = f"---\nname: {name}\ndescription: {desc}\n---\n\n"
     (prompt_dir / f"{prompt_id}.md").write_text(frontmatter + body)
     return prompt_id
+
+
+def delete_custom_prompt(prompt_id: str) -> bool:
+    """Delete a custom prompt by ID. Returns True if deleted."""
+    prompt_dir = CUSTOM_DIR / prompt_id
+    if prompt_dir.exists() and prompt_dir.is_dir():
+        shutil.rmtree(prompt_dir)
+        return True
+    return False
 
 
 def list_custom_prompts() -> list[dict]:

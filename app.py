@@ -9,6 +9,7 @@ import config
 from main import run_custom_analysis, run_freeform_query, run_prompt_analysis
 from prompts import (
     build_prompt,
+    delete_custom_prompt,
     extract_variables,
     list_custom_prompts,
     list_prompts,
@@ -45,9 +46,11 @@ for key, default in [
     if key not in st.session_state:
         st.session_state[key] = default
 
-# Toast for custom prompt save confirmation
+# Toast for custom prompt save/delete confirmation
 if st.session_state.pop("_show_save_toast", False):
     st.toast("Custom prompt saved!")
+if st.session_state.pop("_show_delete_toast", False):
+    st.toast("Custom prompt deleted.")
 
 # Deferred tab switches (must happen before the radio widget is instantiated)
 if st.session_state.pop("_switch_to_results", False):
@@ -86,52 +89,59 @@ tab = st.radio(
     key="active_tab",
 )
 
-def _render_prompt_grid(items):
-    """Render a grid of prompt cards. Shared by Prebuilt and Custom sections."""
-    n_cols = min(len(items), 4)
-    for row_start in range(0, len(items), n_cols):
-        row = items[row_start : row_start + n_cols]
-        cols = st.columns(n_cols)
-        for i, p in enumerate(row):
-            with cols[i]:
-                is_sel = st.session_state.get("selected_prompt") == p["id"]
-                if st.button(
-                    p["name"],
-                    key=f"sel_{p['id']}",
-                    type="primary" if is_sel else "secondary",
-                    use_container_width=True,
-                ):
-                    st.session_state.selected_prompt = p["id"]
-                    st.session_state.prompt_view = None
-                    st.session_state.prompt_view_for = None
-                    st.session_state._switch_to_configure = True
-                    st.rerun()
-                st.caption(p["description"])
+def _select_prompt(prompt_id):
+    """Handle prompt selection from catalog."""
+    st.session_state.selected_prompt = prompt_id
+    st.session_state.prompt_view = None
+    st.session_state.prompt_view_for = None
+    st.session_state._switch_to_configure = True
+    st.rerun()
 
 
 if tab == "Prompts":
-    # Equal-height prompt cards via CSS flexbox
-    st.markdown("""
-<style>
-div[data-testid="stHorizontalBlock"] {
-    align-items: stretch;
-}
-div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
-    display: flex;
-    flex-direction: column;
-}
-div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] > div[data-testid="stVerticalBlockBorderWrapper"] {
-    flex-grow: 1;
-}
-</style>
-""", unsafe_allow_html=True)
-
     st.subheader("Prebuilt")
-    _render_prompt_grid(prebuilt_catalog)
+    with st.container(border=True):
+        col_name, col_desc, col_sel, col_del = st.columns([2, 4, 1, 1])
+        col_name.write("**Name**")
+        col_desc.write("**Description**")
+        col_sel.write("**Select**")
+        col_del.write("**Delete**")
+        st.divider()
+        for i, p in enumerate(prebuilt_catalog):
+            col_name, col_desc, col_sel, col_del = st.columns([2, 4, 1, 1])
+            col_name.write(p["name"])
+            col_desc.write(p["description"])
+            if col_sel.button("Select", key=f"sel_{p['id']}"):
+                _select_prompt(p["id"])
+            col_del.button("Delete", key=f"del_disabled_{p['id']}", disabled=True)
+            if i < len(prebuilt_catalog) - 1:
+                st.divider()
 
     st.subheader("Custom")
     if custom_prompts:
-        _render_prompt_grid(custom_prompts)
+        with st.container(border=True):
+            col_name, col_desc, col_sel, col_del = st.columns([2, 4, 1, 1])
+            col_name.write("**Name**")
+            col_desc.write("**Description**")
+            col_sel.write("**Select**")
+            col_del.write("**Delete**")
+            st.divider()
+            for i, p in enumerate(custom_prompts):
+                col_name, col_desc, col_sel, col_del = st.columns([2, 4, 1, 1])
+                col_name.write(p["name"])
+                col_desc.write(p["description"])
+                if col_sel.button("Select", key=f"sel_{p['id']}"):
+                    _select_prompt(p["id"])
+                with col_del.popover("Delete"):
+                    st.write(f"Delete **{p['name']}**?")
+                    if st.button("Confirm", key=f"del_{p['id']}", type="primary"):
+                        delete_custom_prompt(p["id"])
+                        if st.session_state.get("selected_prompt") == p["id"]:
+                            st.session_state.selected_prompt = None
+                        st.session_state._show_delete_toast = True
+                        st.rerun()
+                if i < len(custom_prompts) - 1:
+                    st.divider()
     else:
         st.caption("No custom prompts yet. Use Edit > Save as Custom to create one.")
 
