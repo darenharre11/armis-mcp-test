@@ -381,8 +381,6 @@ elif tab == "Status":
     st.subheader("Configuration")
     with st.container(border=True):
         st.text(f"Armis MCP URL:  {config.ARMIS_MCP_URL}")
-        masked_key = f"{'*' * (len(config.ARMIS_API_KEY) - 4)}{config.ARMIS_API_KEY[-4:]}"
-        st.text(f"API Key:        {masked_key}")
         st.text(f"Ollama Model:   {config.OLLAMA_MODEL}")
 
     st.subheader("Connection Health")
