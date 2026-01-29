@@ -185,24 +185,30 @@ elif tab == "Configure":
                 except Exception:
                     pass
 
-            result = run_async(
-                run_freeform_query(question.strip(), on_status=on_status)
-            )
-            status_container.update(label="Complete", state="complete")
+            try:
+                result = run_async(
+                    run_freeform_query(question.strip(), on_status=on_status)
+                )
+            except Exception as e:
+                log.append(f"[ERROR] {e}")
+                status_container.update(label="Failed", state="error")
+                st.error(f"Query failed: {e}")
+            else:
+                status_container.update(label="Complete", state="complete")
 
-            st.session_state.result = result
-            st.session_state.result_prompt_id = None
-            st.session_state.result_label = "Free-form Query"
-            st.session_state.status_log = log
-            st.session_state.history.insert(0, {
-                "label": "Free-form Query",
-                "result": result,
-                "prompt_id": None,
-                "log": log,
-            })
-            st.session_state.history = st.session_state.history[:5]
-            st.session_state._switch_to_results = True
-            st.rerun()
+                st.session_state.result = result
+                st.session_state.result_prompt_id = None
+                st.session_state.result_label = "Free-form Query"
+                st.session_state.status_log = log
+                st.session_state.history.insert(0, {
+                    "label": "Free-form Query",
+                    "result": result,
+                    "prompt_id": None,
+                    "log": log,
+                })
+                st.session_state.history = st.session_state.history[:5]
+                st.session_state._switch_to_results = True
+                st.rerun()
 
     else:
         variables = extract_variables(selected_id)
@@ -292,34 +298,40 @@ elif tab == "Configure":
                 except Exception:
                     pass
 
-            if view == "edit":
-                result = run_async(
-                    run_custom_analysis(
-                        st.session_state.prompt_editor, on_status=on_status
+            try:
+                if view == "edit":
+                    result = run_async(
+                        run_custom_analysis(
+                            st.session_state.prompt_editor, on_status=on_status
+                        )
                     )
-                )
+                else:
+                    result = run_async(
+                        run_prompt_analysis(
+                            selected_id, on_status=on_status, **var_values
+                        )
+                    )
+            except Exception as e:
+                log.append(f"[ERROR] {e}")
+                status_container.update(label="Failed", state="error")
+                st.error(f"Analysis failed: {e}")
             else:
-                result = run_async(
-                    run_prompt_analysis(
-                        selected_id, on_status=on_status, **var_values
-                    )
-                )
-            status_container.update(label="Complete", state="complete")
+                status_container.update(label="Complete", state="complete")
 
-            label = prompt_map[selected_id]["name"]
-            st.session_state.result = result
-            st.session_state.result_prompt_id = selected_id
-            st.session_state.result_label = label
-            st.session_state.status_log = log
-            st.session_state.history.insert(0, {
-                "label": label,
-                "result": result,
-                "prompt_id": selected_id,
-                "log": log,
-            })
-            st.session_state.history = st.session_state.history[:5]
-            st.session_state._switch_to_results = True
-            st.rerun()
+                label = prompt_map[selected_id]["name"]
+                st.session_state.result = result
+                st.session_state.result_prompt_id = selected_id
+                st.session_state.result_label = label
+                st.session_state.status_log = log
+                st.session_state.history.insert(0, {
+                    "label": label,
+                    "result": result,
+                    "prompt_id": selected_id,
+                    "log": log,
+                })
+                st.session_state.history = st.session_state.history[:5]
+                st.session_state._switch_to_results = True
+                st.rerun()
 
 else:
     history = st.session_state.history
