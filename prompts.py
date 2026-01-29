@@ -90,9 +90,12 @@ def load_prompt(prompt_id: str) -> str | None:
 
 
 def _extract_section(content: str, section_name: str) -> str | None:
-    """Extract content between ## Section Name and the next ## header."""
-    pattern = rf"## {re.escape(section_name)}\s*\n(.*?)(?=\n## |\Z)"
-    match = re.search(pattern, content, re.DOTALL)
+    """Extract content between ## Section Name and the next ## header.
+
+    Only matches ## at the start of a line (not indented).
+    """
+    pattern = rf"^## {re.escape(section_name)}\s*\n(.*?)(?=\n## |\Z)"
+    match = re.search(pattern, content, re.DOTALL | re.MULTILINE)
     if match:
         return match.group(1).strip()
     return None
@@ -182,7 +185,7 @@ def parse_prompt(prompt_id: str, **variables) -> ParsedPrompt | None:
     mcp_query = _extract_section(template, "MCP Query")
 
     # Extract everything from Analysis Prompt onwards for the LLM
-    analysis_match = re.search(r"## Analysis Prompt\s*\n(.*)", template, re.DOTALL)
+    analysis_match = re.search(r"^## Analysis Prompt\s*\n(.*)", template, re.DOTALL | re.MULTILINE)
     if analysis_match:
         analysis_prompt = analysis_match.group(1).strip()
     else:
@@ -229,7 +232,7 @@ def parse_content(content: str) -> ParsedPrompt:
 
     mcp_query = _extract_section(content, "MCP Query")
 
-    analysis_match = re.search(r"## Analysis Prompt\s*\n(.*)", content, re.DOTALL)
+    analysis_match = re.search(r"^## Analysis Prompt\s*\n(.*)", content, re.DOTALL | re.MULTILINE)
     if analysis_match:
         analysis_prompt = analysis_match.group(1).strip()
     else:

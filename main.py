@@ -49,8 +49,8 @@ async def run_prompt_analysis(prompt_id: str, on_status=None, **variables) -> st
 
     on_status(f"\n[PROMPT] Loaded: {prompt_id}")
 
-    # Check if this is an LLM-only prompt (no MCP query)
-    if parsed.mcp_query is None:
+    # Check if this is an LLM-only prompt (no MCP query or no tools declared)
+    if parsed.mcp_query is None or not parsed.tools:
         on_status("[PROMPT] LLM-only mode (no MCP query)")
 
         # Send analysis prompt directly to LLM
@@ -118,7 +118,7 @@ async def run_custom_analysis(content: str, on_status=None) -> str:
 
     parsed = parse_content(content)
 
-    if parsed.mcp_query is None:
+    if parsed.mcp_query is None or not parsed.tools:
         on_status("[PROMPT] LLM-only mode (no MCP query)")
         on_status("[LLM] Sending prompt to LLM...")
         system_prompt = build_system_prompt()
