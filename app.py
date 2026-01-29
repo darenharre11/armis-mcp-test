@@ -6,6 +6,7 @@ import re
 import streamlit as st
 
 import config
+from history import clear_history, get_run, list_runs, save_run, update_run
 from main import run_custom_analysis, run_freeform_query, run_prompt_analysis
 from prompts import (
     build_prompt,
@@ -42,7 +43,6 @@ for key, default in [
     ("status_log", []),
     ("prompt_view", None),
     ("prompt_view_for", None),
-    ("history", []),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -165,12 +165,28 @@ elif tab == "Configure":
     else:
         st.subheader(prompt_map[selected_id]["name"])
 
+    # Show cancel/error notification from a previous run (read from disk)
+    _prev_run_id = st.session_state.pop("_active_run_id", None)
+    if _prev_run_id:
+        _prev = get_run(_prev_run_id)
+        if _prev and _prev["status"] in ("running", "cancelled"):
+            st.warning(
+                "Run cancelled. Click **Run** to try again, "
+                "or select a different prompt from the **Prompts** tab."
+            )
+        elif _prev and _prev["status"] == "failed":
+            st.error(
+                f"{_prev.get('result', 'Run failed.')}\n\n"
+                "Click **Run** to try again, "
+                "or select a different prompt from the **Prompts** tab."
+            )
+
     if is_freeform:
         question = st.text_area("Your question", height=150)
 
         button_slot = st.empty()
         if button_slot.button("Run", type="primary", disabled=not question.strip()):
-            button_slot.button("Running...", type="primary", disabled=True)
+            button_slot.button("Cancel", type="secondary")
 
             status_container = st.status("Running query...", expanded=True)
             placeholder = status_container.empty()
@@ -183,48 +199,29 @@ elif tab == "Configure":
                 except Exception:
                     pass
 
+            run_id = save_run("Free-form Query")
+            st.session_state._active_run_id = run_id
             try:
                 result = run_async(
                     run_freeform_query(question.strip(), on_status=on_status)
                 )
             except Exception as e:
                 log.append(f"[ERROR] {e}")
-                status_container.update(label="Failed", state="error")
-                st.error(f"Query failed: {e}")
-                st.session_state.history.insert(0, {
-                    "label": "Free-form Query",
-                    "result": f"**Run failed:** {e}",
-                    "prompt_id": None,
-                    "log": log,
-                    "status": "failed",
-                })
-                st.session_state.history = st.session_state.history[:5]
+                update_run(run_id, "failed", result=f"**Run failed:** {e}", log=log)
+                st.rerun()
             except BaseException:
                 log.append("[CANCELLED] Run interrupted")
-                st.session_state.history.insert(0, {
-                    "label": "Free-form Query",
-                    "result": "**Run cancelled** — interrupted by navigation.",
-                    "prompt_id": None,
-                    "log": log,
-                    "status": "cancelled",
-                })
-                st.session_state.history = st.session_state.history[:5]
+                update_run(run_id, "cancelled", result="**Run cancelled** — interrupted.", log=log)
                 raise
             else:
+                update_run(run_id, "complete", result=result, log=log)
+                st.session_state.pop("_active_run_id", None)
                 status_container.update(label="Complete", state="complete")
 
                 st.session_state.result = result
                 st.session_state.result_prompt_id = None
                 st.session_state.result_label = "Free-form Query"
                 st.session_state.status_log = log
-                st.session_state.history.insert(0, {
-                    "label": "Free-form Query",
-                    "result": result,
-                    "prompt_id": None,
-                    "log": log,
-                    "status": "complete",
-                })
-                st.session_state.history = st.session_state.history[:5]
                 st.session_state._switch_to_results = True
                 st.rerun()
 
@@ -302,7 +299,7 @@ elif tab == "Configure":
         # Run — editing bypasses missing-variable check
         can_run = view == "edit" or not missing
         if button_slot.button("Run", type="primary", disabled=not can_run):
-            button_slot.button("Running...", type="primary", disabled=True)
+            button_slot.button("Cancel", type="secondary")
             preview_slot.empty()
 
             status_container = st.status("Running analysis...", expanded=True)
@@ -317,6 +314,8 @@ elif tab == "Configure":
                     pass
 
             label = prompt_map[selected_id]["name"]
+            run_id = save_run(label, prompt_id=selected_id)
+            st.session_state._active_run_id = run_id
             try:
                 if view == "edit":
                     result = run_async(
@@ -332,42 +331,21 @@ elif tab == "Configure":
                     )
             except Exception as e:
                 log.append(f"[ERROR] {e}")
-                status_container.update(label="Failed", state="error")
-                st.error(f"Analysis failed: {e}")
-                st.session_state.history.insert(0, {
-                    "label": label,
-                    "result": f"**Run failed:** {e}",
-                    "prompt_id": selected_id,
-                    "log": log,
-                    "status": "failed",
-                })
-                st.session_state.history = st.session_state.history[:5]
+                update_run(run_id, "failed", result=f"**Run failed:** {e}", log=log)
+                st.rerun()
             except BaseException:
                 log.append("[CANCELLED] Run interrupted")
-                st.session_state.history.insert(0, {
-                    "label": label,
-                    "result": "**Run cancelled** — interrupted by navigation.",
-                    "prompt_id": selected_id,
-                    "log": log,
-                    "status": "cancelled",
-                })
-                st.session_state.history = st.session_state.history[:5]
+                update_run(run_id, "cancelled", result="**Run cancelled** — interrupted.", log=log)
                 raise
             else:
+                update_run(run_id, "complete", result=result, log=log)
+                st.session_state.pop("_active_run_id", None)
                 status_container.update(label="Complete", state="complete")
 
                 st.session_state.result = result
                 st.session_state.result_prompt_id = selected_id
                 st.session_state.result_label = label
                 st.session_state.status_log = log
-                st.session_state.history.insert(0, {
-                    "label": label,
-                    "result": result,
-                    "prompt_id": selected_id,
-                    "log": log,
-                    "status": "complete",
-                })
-                st.session_state.history = st.session_state.history[:5]
                 st.session_state._switch_to_results = True
                 st.rerun()
 
@@ -398,29 +376,40 @@ elif tab == "Results":
             st.rerun()
 
 else:  # History
-    history = st.session_state.history
-    if not history:
+    runs = list_runs()
+    if not runs:
         st.info("No history yet. Results from completed runs will appear here.")
     else:
-        status_tags = {"cancelled": " [cancelled]", "failed": " [failed]"}
+        if st.button("Clear History"):
+            clear_history()
+            st.rerun()
+
+        status_tags = {
+            "cancelled": " [cancelled]",
+            "failed": " [failed]",
+            "running": " [interrupted]",
+        }
         options = [
-            f"{i + 1}. {h['label']}{status_tags.get(h.get('status'), '')}"
-            for i, h in enumerate(history)
+            f"{i + 1}. {r['label']}{status_tags.get(r.get('status'), '')}"
+            for i, r in enumerate(runs)
         ]
         selected_run = st.selectbox("Past runs", options, index=0)
         run_idx = int(selected_run.split(".")[0]) - 1
-        run = history[run_idx]
+        run = runs[run_idx]
 
         st.subheader(run["label"])
-        st.markdown(run["result"])
+        if run.get("result"):
+            st.markdown(run["result"])
+        else:
+            st.caption("No result recorded for this run.")
 
-        prompt_id = run["prompt_id"]
-        if prompt_id and run.get("status") not in ("cancelled", "failed"):
+        prompt_id = run.get("prompt_id")
+        if prompt_id and run.get("status") == "complete":
             viz = load_script(prompt_id)
             if viz:
                 st.divider()
                 viz(run["result"])
 
-        if run["log"]:
+        if run.get("log"):
             with st.expander("Execution log"):
                 st.code("\n".join(run["log"]))

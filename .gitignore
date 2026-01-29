@@ -42,6 +42,9 @@ htmlcov/
 # Custom prompts
 context/prompts/custom/
 
+# Run history
+context/history/
+
 # claude
 .claude/*
 .claude/
