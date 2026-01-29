@@ -1,4 +1,4 @@
-"""Visualizer for prompt-builder: extracts generated template and offers save-to-custom."""
+"""Companion script for prompt-builder: extracts generated template and offers save-to-custom."""
 
 import re
 
@@ -7,7 +7,7 @@ import streamlit as st
 from prompts import save_custom_prompt
 
 
-def visualize(result: str):
+def run(result: str):
     """Parse LLM output for a prompt template and provide save UI."""
     # Extract fenced markdown code block
     match = re.search(r"```markdown\s*\n(.*?)```", result, re.DOTALL)

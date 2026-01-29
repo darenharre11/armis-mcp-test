@@ -12,7 +12,7 @@ from prompts import (
     extract_variables,
     list_custom_prompts,
     list_prompts,
-    load_visualizer,
+    load_script,
     save_custom_prompt,
 )
 
@@ -324,7 +324,7 @@ else:
 
     prompt_id = run["prompt_id"]
     if prompt_id:
-        viz = load_visualizer(prompt_id)
+        viz = load_script(prompt_id)
         if viz:
             st.divider()
             viz(run["result"])

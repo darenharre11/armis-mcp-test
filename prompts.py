@@ -197,20 +197,20 @@ def parse_prompt(prompt_id: str, **variables) -> ParsedPrompt | None:
     )
 
 
-def load_visualizer(prompt_id: str):
-    """Load optional companion .py visualizer for a prompt.
+def load_script(prompt_id: str):
+    """Load optional companion .py script for a prompt.
 
-    Looks for context/prompts/{prompt_id}.py with a visualize(result: str) function.
+    Looks for context/prompts/{prompt_id}/{prompt_id}.py with a run(result: str) function.
     Returns the function, or None if no companion file exists.
     """
     path = PROMPTS_DIR / prompt_id / f"{prompt_id}.py"
     if not path.exists():
         return None
     import importlib.util
-    spec = importlib.util.spec_from_file_location(f"viz_{prompt_id}", path)
+    spec = importlib.util.spec_from_file_location(f"script_{prompt_id}", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return getattr(module, "visualize", None)
+    return getattr(module, "run", None)
 
 
 def parse_content(content: str) -> ParsedPrompt:
