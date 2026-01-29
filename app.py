@@ -9,6 +9,7 @@ import config
 from main import run_custom_analysis, run_freeform_query, run_prompt_analysis
 from prompts import (
     build_prompt,
+    custom_prompt_exists,
     delete_custom_prompt,
     extract_variables,
     list_custom_prompts,
@@ -243,7 +244,13 @@ elif tab == "Configure":
                 if save_id and not re.fullmatch(r"[a-z0-9-]+", save_id):
                     st.warning("ID must contain only lowercase letters, numbers, and hyphens.")
                 save_desc = st.text_input("Description", value="Custom prompt", key="save_desc")
-                valid_save = save_name.strip() and save_id and re.fullmatch(r"[a-z0-9-]+", save_id)
+                exists = save_id and custom_prompt_exists(save_id.strip())
+                if exists:
+                    st.warning(f"Prompt '{save_id}' already exists.")
+                    confirm = st.checkbox("Overwrite existing prompt", key="save_overwrite")
+                else:
+                    confirm = True
+                valid_save = save_name.strip() and save_id and re.fullmatch(r"[a-z0-9-]+", save_id) and confirm
                 if st.button("Save", disabled=not valid_save) and valid_save:
                     save_custom_prompt(
                         save_name.strip(),

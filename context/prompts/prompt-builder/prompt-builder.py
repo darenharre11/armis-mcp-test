@@ -4,7 +4,7 @@ import re
 
 import streamlit as st
 
-from prompts import _parse_frontmatter, save_custom_prompt
+from prompts import _parse_frontmatter, custom_prompt_exists, save_custom_prompt
 
 
 def _extract_template(result: str) -> str | None:
@@ -47,7 +47,13 @@ def run(result: str):
     description = st.text_input("Description", value=default_desc, key="pb_save_desc")
     content = st.text_area("Template", value=template, height=300, key="pb_save_content")
 
-    valid = name.strip() and prompt_id and re.fullmatch(r"[a-z0-9-]+", prompt_id)
+    exists = prompt_id and custom_prompt_exists(prompt_id.strip())
+    if exists:
+        st.warning(f"Prompt '{prompt_id}' already exists.")
+        confirm = st.checkbox("Overwrite existing prompt", key="pb_save_overwrite")
+    else:
+        confirm = True
+    valid = name.strip() and prompt_id and re.fullmatch(r"[a-z0-9-]+", prompt_id) and confirm
     if st.button("Save Prompt", disabled=not valid) and valid:
         save_custom_prompt(
             name.strip(),

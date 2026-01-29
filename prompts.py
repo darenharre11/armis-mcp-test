@@ -265,6 +265,11 @@ def save_custom_prompt(
     return prompt_id
 
 
+def custom_prompt_exists(prompt_id: str) -> bool:
+    """Check if a custom prompt with the given ID already exists."""
+    return (CUSTOM_DIR / prompt_id / f"{prompt_id}.md").exists()
+
+
 def delete_custom_prompt(prompt_id: str) -> bool:
     """Delete a custom prompt by ID. Returns True if deleted."""
     prompt_dir = CUSTOM_DIR / prompt_id
