@@ -94,6 +94,7 @@ Each prompt lives in its own directory under `context/prompts/{id}/{id}.md`. Met
 
 ```markdown
 ---
+id: my-prompt-id
 name: My Prompt Name
 description: Brief description of what it does
 ---
@@ -129,7 +130,7 @@ No Python code changes required:
 
 1. Copy the `_example/` directory: `cp -r context/prompts/_example context/prompts/my-prompt`
 2. Rename the `.md` file: `mv context/prompts/my-prompt/_example.md context/prompts/my-prompt/my-prompt.md`
-3. Edit the frontmatter (`name`, `description`) and fill in sections
+3. Edit the frontmatter (`id`, `name`, `description`) and fill in sections
 
 Or use the **Prompt Builder** in the web UI to generate a template and save it as a custom prompt.
 
@@ -137,13 +138,19 @@ Or use the **Prompt Builder** in the web UI to generate a template and save it a
 
 | Section | Required | Purpose |
 |---------|----------|---------|
-| Frontmatter | Yes | `name` and `description` for catalog display |
+| Frontmatter | Yes | `id`, `name`, and `description` for catalog display |
 | Variables | No | Defines inputs collected from the user. Omit for prompts with no inputs. |
 | Tools | No | MCP/tool dependencies. Use `None` for LLM-only prompts. |
 | MCP Query | No | The query sent to Armis to fetch data. Omit for LLM-only prompts. |
 | Analysis Prompt | Yes | Instructions for the LLM (must include `{{data}}` placeholder if using MCP) |
 | Required Analysis | No | Detailed analysis requirements |
 | Output Format | No | Structure for the LLM's response |
+
+### Companion Scripts
+
+A prompt can include an optional companion `.py` script that runs after the LLM responds. Place it in the same directory with the same name (e.g., `my-prompt/my-prompt.py`). It must export a `run(result: str)` function that receives the raw LLM output. Use Streamlit to render additional UI. Prompts with scripts show a `script` tag in the catalog.
+
+See `context/prompts/_example/_example.py` for a minimal example.
 
 ### Custom Prompts
 
