@@ -34,38 +34,24 @@ A Python client that connects to the Armis MCP server and uses Ollama locally fo
 
 ## Usage
 
-### Analyze a device by MAC address
-
 ```bash
-python main.py --mac AA:BB:CC:DD:EE:FF
+uv run streamlit run app.py
 ```
 
-### Ask a free-form question
+The Streamlit UI has four tabs:
 
-```bash
-python main.py --query "How many critical vulnerabilities are in my environment?"
-python main.py -q "Show me all Windows devices"
-```
-
-### Interactive mode
-
-```bash
-python main.py --interactive
-```
-
-Select from available prompts and provide required inputs. Use `l` to list available prompts at any time.
-
-## Web Interface
-
-```bash
-streamlit run app.py
-```
-
-The Streamlit UI has three tabs:
-
-- **Prompts** -- browse prebuilt and custom prompts
+- **Prompts** -- browse prebuilt and custom prompts, delete custom ones
 - **Configure** -- fill in variables, edit/preview the prompt, and run
-- **Results** -- view output with history of the last 5 runs
+- **Results** -- view the latest output with companion script visualizations
+- **History** -- past runs persisted to disk, survives page refreshes and cancellations
+
+### CLI
+
+```bash
+python main.py --mac AA:BB:CC:DD:EE:FF                                    # analyze device by MAC
+python main.py --query "How many critical vulnerabilities are there?"      # free-form query
+python main.py --interactive                                               # interactive menu
+```
 
 ## Project Structure
 
@@ -76,10 +62,12 @@ armis-mcp-test/
 ├── mcp_client.py     # MCP server connection
 ├── llm.py            # Ollama integration with tool calling
 ├── prompts.py        # Context and prompt loading
+├── history.py        # Disk-persisted run history
 ├── config.py         # Environment configuration
 └── context/
     ├── Role.md       # Agent persona
     ├── Rules.md      # Behavioral constraints
+    ├── history/      # Run history JSON files (gitignored)
     └── prompts/      # Individual prompt templates
         ├── _example/             # Template for creating new prompts
         ├── mac-risk-summarizer/
