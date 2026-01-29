@@ -17,6 +17,7 @@ Get all device information for the device with MAC address {{mac_address}}. Incl
 - Network information (IP address, VLAN, subnet)
 - Any known security risks, vulnerabilities, or alerts
 - Behavioral anomalies or policy violations
+- **Important**: Exclude any CVEs or vulnerabilities that have been marked as "ignored", "suppressed", "accepted", or similar status flags indicating they have been acknowledged and dismissed by the security team. Only include active, unresolved vulnerabilities in your risk analysis.
 
 ## Analysis Prompt
 
@@ -34,17 +35,16 @@ Based on the following device data retrieved from Armis, provide a comprehensive
    - First seen and last seen timestamps
    - Network information (IP, VLAN, etc.)
 
-2. **Security Risks**: Identify the top 3 security risks for this device based on:
+1. **Security Risks**: Identify the top 3 security risks for this device based on:
    - OS version and patch status
    - Device type vulnerabilities
    - Network exposure
    - Behavioral anomalies
 
-   **Important**: Exclude any CVEs or vulnerabilities that have been marked as "ignored", "suppressed", "accepted", or similar status flags indicating they have been acknowledged and dismissed by the security team. Only include active, unresolved vulnerabilities in your risk analysis.
 
-3. **Recommendations**: Provide top 3 actionable recommendations to improve security posture.
+1. **Recommendations**: Provide top 3 actionable recommendations to improve security posture.
 
-4. **Overall Risk Evaluation**: Assign a risk level (Low/Medium/High/Critical) with justification.
+1. **Overall Risk Evaluation**: Assign a risk level (Low/Medium/High/Critical) with justification.
 
 ## Output Format
 
@@ -62,10 +62,10 @@ Structure your response as:
 1. **[Risk Name]** (Severity: High/Medium/Low)
    - Description of the risk
 
-2. **[Risk Name]** (Severity: High/Medium/Low)
+1. **[Risk Name]** (Severity: High/Medium/Low)
    - Description of the risk
 
-3. **[Risk Name]** (Severity: High/Medium/Low)
+1. **[Risk Name]** (Severity: High/Medium/Low)
    - Description of the risk
 
 ### Recommendations

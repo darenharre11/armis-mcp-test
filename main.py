@@ -78,7 +78,9 @@ async def run_prompt_analysis(prompt_id: str, **variables) -> None:
         # Replace common data placeholders
         analysis_prompt = parsed.analysis_prompt
         for placeholder in ["device_data", "data", "mcp_data", "result"]:
-            analysis_prompt = analysis_prompt.replace(f"{{{{{placeholder}}}}}", mcp_data)
+            analysis_prompt = analysis_prompt.replace(
+                f"{{{{{placeholder}}}}}", mcp_data
+            )
 
         # Step 3: Send to LLM for analysis
         print("\n" + "=" * 60)
@@ -129,7 +131,7 @@ def display_menu(prompts: list[dict]) -> None:
     """Display the interactive menu options."""
     print("\nAvailable options:")
     print("-" * 40)
-    print("  0. Ask a question (free-form) [Experimental]")
+    print("  0. Ask a question [Experimental]")
     for i, p in enumerate(prompts, 1):
         print(f"  {i}. {p['name']}: {p['description']}")
     print("-" * 40)
@@ -146,7 +148,9 @@ async def interactive_mode() -> None:
 
     while True:
         try:
-            choice = input("\nSelect option (number), 'l' to list, or 'q' to quit: ").strip()
+            choice = input(
+                "\nSelect option (number), 'l' to list, or 'q' to quit: "
+            ).strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
@@ -209,12 +213,14 @@ def main() -> None:
         help="Analyze device by MAC address",
     )
     parser.add_argument(
-        "--query", "-q",
+        "--query",
+        "-q",
         metavar="QUESTION",
         help="Ask a free-form question",
     )
     parser.add_argument(
-        "--interactive", "-i",
+        "--interactive",
+        "-i",
         action="store_true",
         help="Run in interactive menu mode",
     )

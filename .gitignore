@@ -38,3 +38,7 @@ ENV/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# claude
+.claude/*
+.claude/
