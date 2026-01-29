@@ -129,7 +129,7 @@ def display_menu(prompts: list[dict]) -> None:
     """Display the interactive menu options."""
     print("\nAvailable options:")
     print("-" * 40)
-    print("  0. Ask a question (free-form)")
+    print("  0. Ask a question (free-form) [Experimental]")
     for i, p in enumerate(prompts, 1):
         print(f"  {i}. {p['name']}: {p['description']}")
     print("-" * 40)
